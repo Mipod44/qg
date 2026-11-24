@@ -96,6 +96,36 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
 .empty{padding:22px;border:1.5px dashed var(--line);color:var(--mut);text-align:center}
 #status{font-size:14px;color:var(--mut)}
 .hide{display:none!important}
+.dict{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mic{display:inline-flex;align-items:center;gap:8px}
+.mic::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--red)}
+.mic.rec{background:var(--red);border-color:var(--red);color:#fff}
+.mic.rec::before{background:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:8px 0 26px}
+.wd{background:var(--panel);padding:10px;min-height:150px;border-top:3px solid var(--line)}
+.wd.today{border-top-color:var(--red)}
+.wd h4{margin:0 0 6px;font:700 15px Oswald,sans-serif;text-transform:uppercase}
+.wd h4 span{color:var(--mut);font-weight:500}
+.wd ul{list-style:none;margin:0;padding:0;display:grid;gap:5px;font-size:14px;line-height:1.3}
+.wd li{padding-left:8px;border-left:3px solid var(--line)}
+.wd li.k-task{border-color:var(--ink)}.wd li.k-task.done{color:var(--mut);text-decoration:line-through}
+.wd li.k-meet{border-color:var(--red);font-weight:600}
+.wd li.k-ev{border-color:var(--redInk)}
+.wd li.k-info{color:var(--mut)}
+.sub{margin:30px 0 8px;font:500 20px Oswald,sans-serif;text-transform:uppercase}
+.meet{display:grid;grid-template-columns:4.5em minmax(0,1fr) auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);align-items:start}
+.meet .d{font:700 30px/0.95 Oswald,sans-serif;text-align:center;color:var(--redInk)}.meet .d span{display:block;font-size:14px;color:var(--ink);text-transform:uppercase}
+.meet h3{font-size:19px}
+.scroll{overflow-x:auto}
+.duty{width:100%;min-width:640px}
+.duty td,.duty th{vertical-align:top}
+.duty td.t{white-space:nowrap;font-weight:700}
+.duty mark{background:var(--red);color:#fff;padding:0 3px}
+.duty tr.mine td{background:color-mix(in srgb,var(--red) 10%,transparent)}
+@media(max-width:600px){.duty{min-width:0}.duty thead{display:none}.duty tr{display:block;padding:8px 0;border-bottom:1px solid var(--line)}.duty td{display:flex;gap:10px;border:0;padding:2px 0}.duty td::before{content:attr(data-l);flex:none;width:8.5em;color:var(--mut);font-size:13px}.duty td:empty{display:none}}
+@media(max-width:900px){.week{grid-template-columns:minmax(0,1fr)}.wd{min-height:0}}
+@media(max-width:600px){.top{flex-wrap:wrap}.top .who{flex-basis:100%;margin-left:0;text-align:left}.top .who br{display:none}.top .who button{margin:0}}
 #fTeam{width:auto;min-width:14em}
 .who{margin-left:auto;position:relative;z-index:1;text-align:right;font-size:14px}
 .who button{margin-top:6px}
@@ -132,7 +162,8 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
   <a href="#matchs" data-v="matchs">Matchs et scores</a>
   <a href="#echanges" data-v="echanges">Échanges coachs</a>
   <a href="#evenements" data-v="evenements">Événements</a>
-  <a href="#taches" data-v="taches">Tâches</a>
+  <a href="#taches" data-v="taches">Tâches et agenda</a>
+  <a href="#salle" data-v="salle">Tours de salle</a>
   <a href="#membres" data-v="membres" id="navMembres" class="hide">Membres</a>
 </nav>
 <main>
@@ -166,8 +197,8 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
   <div class="chips" id="cats"></div>
   <div class="msgs" id="msgList"></div>
   <form class="form w" id="msgForm" style="grid-template-columns:minmax(0,1fr)">
-    <label>Message pour <span id="msgCat"></span><textarea id="m_text" required placeholder="Effectif, absences, consignes, horaires d'entraînement…"></textarea></label>
-    <div><button class="pri">Envoyer</button></div>
+    <label>Message pour <span id="msgCat"></span><textarea id="m_text" required placeholder="Effectif, absences, consignes, horaires d'entraînement… ou appuyez sur Dicter et parlez."></textarea></label>
+    <div class="dict"><button type="button" class="mic" id="micBtn">Dicter</button><button class="pri">Envoyer</button><span class="note" id="micNote"></span></div>
   </form>
 </section>
 
@@ -186,17 +217,53 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
 </section>
 
 <section id="v-taches" class="hide">
-  <div class="bar"><div><h2>Tâches récurrentes</h2><p class="note">Cochez quand c'est fait. « Nouvelle semaine » décoche les tâches hebdomadaires.</p></div>
+  <div class="bar"><div><h2>Tâches et agenda</h2><p class="note">Le pense-bête de la semaine : tâches du jour, réunions, événements, matchs et tours de salle.</p></div>
   <button id="resetWeek" class="w">Nouvelle semaine</button></div>
+  <div class="week" id="week"></div>
+  <h3 class="sub">Prochaines réunions</h3>
+  <div id="meetList"></div>
+  <details class="w"><summary>Ajouter une réunion</summary>
+  <form class="form" id="meetForm">
+    <label>Date<input type="date" id="r_date" required></label>
+    <label>Heure<input id="r_time" placeholder="20h00"></label>
+    <label>Instance<select id="r_body"><option>Bureau</option><option>Comité directeur</option><option>Commission technique</option><option>Commission sportive</option><option>Commission animation</option><option>Assemblée générale</option><option>Autre</option></select></label>
+    <label>Lieu<input id="r_place" placeholder="Club-house"></label>
+    <label class="full">Ordre du jour<textarea id="r_agenda"></textarea></label>
+    <div class="full"><button class="pri">Ajouter</button></div>
+  </form></details>
+  <h3 class="sub">Toutes les tâches</h3>
   <div id="taskList"></div>
   <details class="w"><summary>Ajouter une tâche</summary>
   <form class="form" id="taskForm">
     <label class="full">Tâche<input id="t_title" required></label>
     <label>Fréquence<select id="t_freq"><option>Chaque semaine</option><option>Chaque mois</option><option>Ponctuel</option></select></label>
-    <label>Quand<input id="t_when" placeholder="Jeudi soir"></label>
+    <label>Jour<select id="t_day"><option value="">Pas de jour fixe</option><option>Lundi</option><option>Mardi</option><option>Mercredi</option><option>Jeudi</option><option>Vendredi</option><option>Samedi</option><option>Dimanche</option></select></label>
+    <label>Précision<input id="t_when" placeholder="soir, avant 18h…"></label>
     <label>Qui<input id="t_owner"></label>
     <div class="full"><button class="pri">Ajouter</button></div>
   </form></details>
+</section>
+
+<section id="v-salle" class="hide">
+  <div class="bar"><div><h2>Tours de salle</h2><p class="note">Qui arbitre, qui tient la table de marque, qui est responsable de salle. Tapez votre nom pour voir vos créneaux.</p></div>
+  <input id="dSearch" type="search" placeholder="Rechercher un nom" aria-label="Rechercher un nom" style="width:auto;min-width:14em"></div>
+  <div id="dutyList"></div>
+  <details class="w"><summary>Ajouter un créneau</summary>
+  <form class="form" id="dutyForm">
+    <label>Date<input type="date" id="d_date" required></label>
+    <label>Heure<input id="d_time" placeholder="13h30"></label>
+    <label>Match<input id="d_match" placeholder="U9F - ASC Trignac"></label>
+    <label>Arbitres<input id="d_arb"></label>
+    <label>Table de marque<input id="d_table" placeholder="marqueur, chrono"></label>
+    <label>Responsable de salle<input id="d_resp"></label>
+    <div class="full"><button class="pri">Ajouter</button></div>
+  </form></details>
+  <details class="w"><summary>Importer un planning depuis Excel</summary>
+  <div class="form" style="grid-template-columns:minmax(0,1fr)">
+    <p class="note" style="margin:0">Copiez les lignes dans Excel ou Google Sheets et collez-les ici, dans cet ordre de colonnes : Date, Heure, Match, Arbitres, Table de marque, Responsable de salle. Vous pouvez aussi envoyer le fichier à Claude, qui l'importera.</p>
+    <textarea id="dPaste" placeholder="28/11/2026&#9;13h30&#9;U9F - ASC Trignac&#9;Léa, Tom&#9;Paul, Marie&#9;Jean"></textarea>
+    <div><button type="button" class="pri" id="dImport">Importer</button> <span class="note" id="dImportNote"></span></div>
+  </div></details>
 </section>
 
 <section id="v-membres" class="hide">
