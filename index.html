@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QG AS La Madeleine</title>
+<link rel="icon" href="logo.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: club office tool (site autonome, Firebase), read at a glance on a phone at the gym
+   IDEA the club's own signage: round ASM badge, black corner-cut labels, red and black swooshes on white walls
+   PICTURE the weekend as an infographic: big numbers in red rings, then the board of convocation times
+   COLOUR white ground, black ink, club red #d71920; dark theme = same badge at night on #0f0f10
+   TYPE Oswald (the club's condensed lettering) + Barlow
+   LAYOUT logo and name left with swooshes right, stat row, black tab bar, one working view; stack under 600px */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0f0f10);--ink:light-dark(#111111,#f3f3f3);--mut:light-dark(#6b6b6b,#a8a8a8);--red:#d71920;--redInk:light-dark(#c3141b,#ff4a50);--line:light-dark(#e6e6e6,#2b2b2d);--panel:light-dark(#f6f6f6,#18181a);--blk:light-dark(#111111,#f3f3f3);--blkInk:light-dark(#ffffff,#111111)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:Oswald,"Arial Narrow",sans-serif;font-weight:700;line-height:1.05;margin:0;text-transform:uppercase}
+.top{position:relative;overflow:hidden;padding:20px max(4vw,16px) 18px;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--line)}
+.top img{width:clamp(72px,11vw,104px);height:auto;flex:none;position:relative;z-index:1}
+.top .nm{position:relative;z-index:1}
+.top h1{font-size:clamp(34px,6vw,52px);letter-spacing:.01em}
+.top h1 em{display:block;font-style:normal;color:var(--redInk);font-size:.52em;font-weight:500;letter-spacing:.08em}
+.top p{margin:6px 0 0;font-size:14px;color:var(--mut)}
+.sw{position:absolute;right:0;top:0;height:100%;width:min(46vw,560px);pointer-events:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(12em,1fr));gap:14px 22px;padding:18px max(4vw,16px);background:var(--panel);border-bottom:1px solid var(--line)}
+.st{display:flex;align-items:center;gap:12px}
+.st b{flex:none;width:64px;height:64px;border-radius:50%;border:3px solid var(--red);display:grid;place-items:center;font:700 28px/1 Oswald,sans-serif;color:var(--redInk);background:var(--bg)}
+.st.live b{background:var(--red);color:#fff}
+.st span{font:600 15px/1.2 Oswald,sans-serif;text-transform:uppercase}
+.st small{display:block;font:400 13px Barlow,sans-serif;text-transform:none;color:var(--mut);margin-top:2px}
+nav{display:flex;gap:0;overflow-x:auto;padding:0 max(4vw,16px);background:#111;position:sticky;top:0;z-index:5}
+nav a{flex:none;padding:13px 18px;color:#cfcfcf;text-decoration:none;font:500 16px Oswald,sans-serif;text-transform:uppercase}
+nav a.on{background:var(--red);color:#fff;clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%);padding-right:24px}
+main{padding:26px max(4vw,16px) 60px;max-width:1240px;margin:0 auto}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+.bar h2{display:inline-block;background:var(--blk);color:var(--blkInk);font-size:clamp(20px,3vw,26px);font-weight:500;padding:6px 30px 6px 14px;clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%)}
+.note{color:var(--mut);font-size:14px;margin:8px 0 0}
+.day{margin:22px 0 8px;font:700 20px Oswald,sans-serif;text-transform:uppercase;color:var(--redInk);display:flex;align-items:center;gap:10px}
+.day::after{content:"";flex:1;height:2px;background:linear-gradient(90deg,var(--red),transparent)}
+.conv{display:grid;grid-template-columns:5.2em 7.5em minmax(0,1fr) auto;gap:4px 16px;align-items:center;padding:12px 12px;margin-bottom:6px;background:var(--panel);border-left:6px solid var(--blk)}
+.conv.dom{border-left-color:var(--red)}
+.conv .t{font:700 30px/1 Oswald,sans-serif;white-space:nowrap}
+.conv.dom .t{color:var(--redInk)}
+.conv .eq{font:700 19px/1.1 Oswald,sans-serif;text-transform:uppercase}
+.conv .where{font-size:14px;color:var(--mut)}
+.tag{display:inline-block;font:500 12px/1.6 Oswald,sans-serif;text-transform:uppercase;padding:1px 8px;background:var(--blk);color:var(--blkInk);white-space:nowrap}
+.tag.dom{background:var(--red);color:#fff}.tag.live{background:var(--red);color:#fff}.tag.fin{background:var(--mut);color:var(--bg)}.tag.plain{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+button,.btn{font:500 15px Oswald,sans-serif;text-transform:uppercase;min-height:44px;padding:0 16px;border-radius:3px;border:2px solid var(--ink);background:var(--bg);color:var(--ink);cursor:pointer}
+button.pri{background:var(--red);border-color:var(--red);color:#fff}
+button.sm{min-height:36px;padding:0 10px;font-size:13px}
+button.x{border-color:var(--line);color:var(--mut)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,nav a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+input,select,textarea{font:16px Barlow,sans-serif;padding:9px 10px;border:1.5px solid var(--line);border-radius:3px;background:var(--bg);color:var(--ink);min-height:44px;width:100%}
+textarea{min-height:90px;resize:vertical}
+label{font-size:14px;font-weight:600;display:grid;gap:4px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(11em,1fr));gap:10px;padding:16px;background:var(--panel);border-top:3px solid var(--red);margin:12px 0}
+.form .full{grid-column:1/-1}
+details>summary{cursor:pointer;font:500 15px Oswald,sans-serif;text-transform:uppercase;color:var(--redInk);padding:10px 0}
+.grid2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px;align-items:start}
+.match{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:center}
+.match .eq{font:700 19px Oswald,sans-serif;text-transform:uppercase}
+.match .eq span{font:400 15px Barlow,sans-serif;text-transform:none;color:var(--mut)}
+.score{display:flex;align-items:center;gap:6px}
+.score input{width:4.2em;text-align:center;font:700 22px Oswald,sans-serif;padding:4px}
+.score b{font:700 28px Oswald,sans-serif;font-variant-numeric:tabular-nums}
+.score select{width:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{font:500 13px Oswald,sans-serif;text-transform:uppercase;color:var(--mut)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.us td{font-weight:700;background:var(--red);color:#fff}
+.panel{background:var(--panel);padding:16px;border-top:3px solid var(--blk)}
+.panel h3{font-size:22px;margin-bottom:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.chips button{min-height:36px;font-size:14px;border-color:var(--line)}
+.chips button.on{background:var(--blk);color:var(--blkInk);border-color:var(--blk)}
+.chips button i{font-style:normal;background:var(--red);color:#fff;border-radius:99px;padding:0 6px;margin-left:4px;font-size:12px}
+.msgs{display:grid;gap:10px;margin-bottom:14px}
+.msg{padding:10px 12px;background:var(--panel);border-left:4px solid var(--blk);max-width:46em}
+.msg.me{border-left-color:var(--red);margin-left:auto}
+.msg small{color:var(--mut);display:block;font-size:13px}
+.msg p{margin:2px 0 0;white-space:pre-wrap}
+.ev{display:grid;grid-template-columns:4.5em minmax(0,1fr) auto;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);align-items:start}
+.ev .d{font:700 34px/0.95 Oswald,sans-serif;text-align:center;color:var(--redInk)}.ev .d span{display:block;font-size:15px;color:var(--ink);text-transform:uppercase}
+.ev h3{font-size:21px}
+.task{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.task input{width:26px;height:26px;min-height:0;accent-color:var(--red);justify-self:center}
+.task.done .tt{text-decoration:line-through;color:var(--mut)}
+.tt small{display:block;color:var(--mut);font-size:13px}
+.empty{padding:22px;border:1.5px dashed var(--line);color:var(--mut);text-align:center}
+#status{font-size:14px;color:var(--mut)}
+.hide{display:none}
+#fTeam{width:auto;min-width:14em}
+.who{margin-left:auto;position:relative;z-index:1;text-align:right;font-size:14px}
+.who button{margin-top:6px}
+.gate{min-height:70vh;display:grid;place-items:center;padding:32px 16px}
+.card{width:min(440px,100%);text-align:center;padding:28px 22px;background:var(--panel);border-top:4px solid var(--red)}
+.card img{width:120px;height:auto}
+.card h2{font-size:32px;margin:10px 0 6px}
+.card p{color:var(--mut);margin:0 0 18px}
+.card form{display:grid;gap:10px;margin-top:14px;text-align:left}
+.card .or{margin:16px 0 0;font-size:13px;color:var(--mut)}
+.card button{width:100%}
+.mem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.mem small{display:block;color:var(--mut);font-size:13px}
+.mem select{width:auto}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--blk);color:var(--blkInk);padding:10px 16px;font-size:15px;display:none;z-index:9}
+@media(max-width:600px){.who{font-size:13px}.who span{display:none}}
+
+@media(max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.sw{opacity:.35}.stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.st b{width:52px;height:52px;font-size:23px}.st span{font-size:13px}.conv{grid-template-columns:4.6em minmax(0,1fr)}.conv .t{font-size:26px}.conv .acts{grid-column:1/-1;justify-content:flex-start}.conv .m{grid-column:2}}
+@media(prefers-reduced-motion:no-preference){.conv,.msg,.match{animation:in .25s ease-out}@keyframes in{from{opacity:0;transform:translateX(-6px)}}}
+</style>
+</head>
+<body>
+<header class="top">
+  <svg class="sw" viewBox="0 0 560 160" preserveAspectRatio="xMaxYMid slice" aria-hidden="true"><path d="M120 170 C260 120 400 40 600 -10" fill="none" stroke="#d71920" stroke-width="14"/><path d="M180 175 C300 125 430 55 610 10" fill="none" stroke="var(--ink)" stroke-width="7"/><path d="M60 170 C220 130 380 60 580 -20" fill="none" stroke="#d71920" stroke-width="3"/><path d="M250 180 C350 140 470 80 620 40" fill="none" stroke="#d71920" stroke-width="5" opacity=".55"/></svg>
+  <img src="logo.webp" alt="Logo ASM Basket La Madeleine" width="104" height="104">
+  <div class="nm"><h1>ASM Basket<em>La Madeleine · QG du club</em></h1><p>Bureau, entraîneurs, commission technique · <span id="status">Connexion…</span></p></div>
+  <div class="who hide" id="who"><span id="whoName"></span><br><button class="sm" id="logout">Se déconnecter</button></div>
+</header>
+<div id="app" class="hide">
+<div class="stats" id="tally"></div>
+<nav id="nav">
+  <a href="#convocations" data-v="convocations">Convocations</a>
+  <a href="#matchs" data-v="matchs">Matchs et scores</a>
+  <a href="#echanges" data-v="echanges">Échanges coachs</a>
+  <a href="#evenements" data-v="evenements">Événements</a>
+  <a href="#taches" data-v="taches">Tâches</a>
+  <a href="#membres" data-v="membres" id="navMembres" class="hide">Membres</a>
+</nav>
+<main>
+<section id="v-convocations">
+  <div class="bar"><div><h2>Convocations</h2><p class="note">Domicile : 45 min avant le match. Extérieur : heure de départ du parking de la salle.</p></div>
+  <select id="fTeam" aria-label="Filtrer par équipe"></select></div>
+  <div id="convList"></div>
+  <details class="w"><summary>Ajouter une convocation</summary>
+  <form class="form" id="convForm">
+    <label>Date<input type="date" id="c_date" required></label>
+    <label>Équipe<select id="c_team" required></select></label>
+    <label>Convocation<input id="c_conv" placeholder="12h45" required></label>
+    <label>Match<input id="c_match" placeholder="13h30" required></label>
+    <label>Adversaire<input id="c_opp" required></label>
+    <label>Lieu<select id="c_home"><option value="1">Domicile</option><option value="0">Extérieur</option></select></label>
+    <label class="full">Salle et trajet (extérieur)<input id="c_place" placeholder="Salle Jean Ménager, Guérande · 9 min"></label>
+    <div class="full"><button class="pri">Ajouter</button></div>
+  </form></details>
+</section>
+
+<section id="v-matchs" class="hide">
+  <div class="bar"><div><h2>Matchs et scores</h2><p class="note">Saisissez le score pendant le match : tout le monde le voit en direct.</p></div></div>
+  <div class="grid2">
+    <div id="matchList"></div>
+    <div class="panel" id="standings"></div>
+  </div>
+</section>
+
+<section id="v-echanges" class="hide">
+  <div class="bar"><div><h2>Échanges coachs</h2><p class="note">Un fil par catégorie, entre coach, entraîneur et commission technique.</p></div></div>
+  <div class="chips" id="cats"></div>
+  <div class="msgs" id="msgList"></div>
+  <form class="form w" id="msgForm" style="grid-template-columns:minmax(0,1fr)">
+    <label>Message pour <span id="msgCat"></span><textarea id="m_text" required placeholder="Effectif, absences, consignes, horaires d'entraînement…"></textarea></label>
+    <div><button class="pri">Envoyer</button></div>
+  </form>
+</section>
+
+<section id="v-evenements" class="hide">
+  <div class="bar"><div><h2>Événements du club</h2><p class="note">Tournois, plateaux, manifestations, réunions où le club participe.</p></div></div>
+  <div id="evList"></div>
+  <details class="w"><summary>Ajouter un événement</summary>
+  <form class="form" id="evForm">
+    <label>Date<input type="date" id="e_date" required></label>
+    <label>Intitulé<input id="e_title" required></label>
+    <label>Lieu<input id="e_place"></label>
+    <label>Responsable<input id="e_owner"></label>
+    <label class="full">Détails<textarea id="e_notes"></textarea></label>
+    <div class="full"><button class="pri">Ajouter</button></div>
+  </form></details>
+</section>
+
+<section id="v-taches" class="hide">
+  <div class="bar"><div><h2>Tâches récurrentes</h2><p class="note">Cochez quand c'est fait. « Nouvelle semaine » décoche les tâches hebdomadaires.</p></div>
+  <button id="resetWeek" class="w">Nouvelle semaine</button></div>
+  <div id="taskList"></div>
+  <details class="w"><summary>Ajouter une tâche</summary>
+  <form class="form" id="taskForm">
+    <label class="full">Tâche<input id="t_title" required></label>
+    <label>Fréquence<select id="t_freq"><option>Chaque semaine</option><option>Chaque mois</option><option>Ponctuel</option></select></label>
+    <label>Quand<input id="t_when" placeholder="Jeudi soir"></label>
+    <label>Qui<input id="t_owner"></label>
+    <div class="full"><button class="pri">Ajouter</button></div>
+  </form></details>
+</section>
+
+<section id="v-membres" class="hide">
+  <div class="bar"><div><h2>Membres</h2><p class="note">Validez les personnes qui demandent l'accès. Staff : bureau, coachs, commission technique. Admin : peut aussi valider les autres.</p></div></div>
+  <div id="memList"></div>
+</section>
+</main>
+</div>
+
+<div id="gLogin" class="gate hide"><div class="card">
+  <img src="logo.webp" alt="" width="120" height="120">
+  <h2>QG du club</h2><p>Réservé au bureau, aux entraîneurs et à la commission technique.</p>
+  <button class="pri" id="gBtn">Continuer avec Google</button>
+  <p class="or">ou recevoir un lien de connexion par e-mail</p>
+  <form id="mailForm"><input type="email" id="mail" required placeholder="prenom@exemple.fr" autocomplete="email"><button>Recevoir le lien</button></form>
+</div></div>
+<div id="gWait" class="gate hide"><div class="card">
+  <img src="logo.webp" alt="" width="120" height="120">
+  <h2>Demande envoyée</h2><p>Un responsable du club doit valider votre accès. Rechargez la page une fois prévenu.</p>
+  <button id="logout2">Se déconnecter</button>
+</div></div>
+<div id="gConfirm" class="gate hide"><div class="card">
+  <h2>Confirmez votre e-mail</h2><p>Saisissez l'adresse à laquelle vous avez reçu le lien.</p>
+  <form id="confForm"><input type="email" id="confMail" required><button class="pri">Se connecter</button></form>
+</div></div>
+
+<div id="toast" role="status"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
