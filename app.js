@@ -156,15 +156,27 @@ function renderMatches(){
     const st=m.status==="live"?'<span class="tag live">En direct</span>':m.status==="fin"?'<span class="tag fin">Terminé</span>':`<span class="tag plain">${esc(m.time||"")}</span>`;
     const res=m.status==="fin"&&m.us!=null&&m.them!=null?(m.us>m.them?" · Victoire":" · Défaite"):"";
     out+=`<div class="match"><div><div class="eq">${esc(m.team)} <span>${m.home?"reçoit":"chez"} ${esc(m.opp)}</span></div><div>${st}<span class="note">${res}</span></div></div>
-    <div class="score" data-m="${esc(m.id)}"><input type="number" min="0" inputmode="numeric" aria-label="Score ASM" data-f="us" value="${m.us??""}"><b>–</b><input type="number" min="0" inputmode="numeric" aria-label="Score adversaire" data-f="them" value="${m.them??""}">
-      <select data-f="status" aria-label="Statut"><option value="avenir"${m.status==="avenir"?" selected":""}>À venir</option><option value="live"${m.status==="live"?" selected":""}>En direct</option><option value="fin"${m.status==="fin"?" selected":""}>Terminé</option></select></div></div>`}
+    <div class="score" data-m="${esc(m.id)}"><input type="number" min="0" inputmode="numeric" aria-label="Score ASM" data-f="us" value="${m.us??""}"${m.status==="fin"?" disabled":""}><b>–</b><input type="number" min="0" inputmode="numeric" aria-label="Score adversaire" data-f="them" value="${m.them??""}"${m.status==="fin"?" disabled":""}>
+      <select data-f="status" aria-label="Statut"${m.status==="fin"?" disabled":""}><option value="avenir"${m.status==="avenir"?" selected":""}>À venir</option><option value="live"${m.status==="live"?" selected":""}>En direct</option><option value="fin"${m.status==="fin"?" selected":""}>Terminé</option></select>${m.status==="fin"?'<span class="lock">Score validé</span>':""}</div><div class="cf hide" id="cf-${esc(m.id)}"></div></div>`}
   $("matchList").innerHTML=out}
   const t=S.table;
   $("standings").innerHTML=t?`<h3>${esc(t.title)}</h3><table><thead><tr><th>#</th><th>Équipe</th><th class="n">Pts</th><th class="n">V-D</th></tr></thead><tbody>${(t.rows||[]).map((r,i)=>`<tr class="${/madeleine/i.test(r.eq)?"us":""}"><td>${i+1}</td><td>${esc(r.eq)}</td><td class="n">${esc(r.pts)}</td><td class="n">${esc(r.v)}-${esc(r.d)}</td></tr>`).join("")}</tbody></table>${t.note?`<p class="note">${esc(t.note)}</p>`:""}`:'<h3>Classement</h3><p class="note">Pas encore de classement saisi.</p>';
 }
 $("matchList").onchange=async e=>{const el=e.target;const box=el.closest("[data-m]");if(!box)return;
-  const f=el.dataset.f;let v=el.value;if(f!=="status")v=v===""?null:Math.max(0,parseInt(v,10)||0);
-  await safe(updateDoc(doc(db,"matches",box.dataset.m),{[f]:v}))};
+  const id=box.dataset.m;const m=S.matches.find(x=>x.id===id);if(!m||m.status==="fin"){renderMatches();return}
+  const f=el.dataset.f;let v=el.value;
+  if(f==="status"&&v==="fin"){el.value=m.status||"avenir";askFinish(id,box);return}
+  if(f!=="status")v=v===""?null:Math.max(0,parseInt(v,10)||0);
+  await safe(updateDoc(doc(db,"matches",id),{[f]:v}))};
+function askFinish(id,box){const m=S.matches.find(x=>x.id===id);const us=box.querySelector('[data-f="us"]').value,th=box.querySelector('[data-f="them"]').value;
+  if(us===""||th===""){toast("Saisissez les deux scores avant de terminer le match");return}
+  const cf=$("cf-"+id);cf.innerHTML=`<p>Terminer <b>${esc(m.team)}</b> contre ${esc(m.opp)} sur le score de <b>${esc(us)} – ${esc(th)}</b> ? Le score sera définitif et ne pourra plus être modifié.</p><button type="button" class="pri sm" data-cfok="${esc(id)}">Confirmer le score final</button><button type="button" class="sm" data-cfno="${esc(id)}">Annuler</button>`;cf.classList.remove("hide");cf.querySelector("[data-cfok]").focus()}
+$("matchList").addEventListener("click",async e=>{const ok=e.target.closest("[data-cfok]"),no=e.target.closest("[data-cfno]");
+  if(no){const c=$("cf-"+no.dataset.cfno);c.classList.add("hide");c.innerHTML="";return}
+  if(!ok)return;const id=ok.dataset.cfok;const box=document.querySelector(`.score[data-m="${id}"]`);if(!box)return;
+  const us=parseInt(box.querySelector('[data-f="us"]').value,10),th=parseInt(box.querySelector('[data-f="them"]').value,10);
+  if(isNaN(us)||isNaN(th)){toast("Score incomplet");return}ok.disabled=true;
+  if(await safe(updateDoc(doc(db,"matches",id),{us:Math.max(0,us),them:Math.max(0,th),status:"fin"}))!==false)toast("Match terminé : score validé")});
 
 /* ---------- Échanges ---------- */
 function renderCats(){const n={};S.msgs.forEach(m=>n[m.cat]=(n[m.cat]||0)+1);
