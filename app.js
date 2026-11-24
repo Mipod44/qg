@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig, SUPER_ADMIN } from "./config.js";
 import { SEED } from "./seed.js";
 
@@ -70,20 +70,26 @@ function start(){
 }
 /* ---------- Mon profil ---------- */
 const initials=s=>String(s||"?").split(/[\s.@-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+const linked=m=>m?[...new Set([...(m.persons||[]),...(m.person?[m.person]:[])])]:[];
+async function getPerson(pid){let p=S.pmap[pid];if(!p){try{const d=await getDoc(doc(db,"people",pid));if(d.exists()){p={id:d.id,...d.data()};S.pmap[pid]=p}}catch{}}return p||null}
 async function loadMe(){
-  const pid=S.me&&S.me.person;let p=pid?S.pmap[pid]:null;
-  if(pid&&!p){try{const d=await getDoc(doc(db,"people",pid));if(d.exists()){p={id:d.id,...d.data()};S.pmap[pid]=p}}catch{}}
-  S.person=p||null;
+  const ids=linked(S.me);S.myPeople=(await Promise.all(ids.map(getPerson))).filter(Boolean);
+  let act=null;try{act=localStorage.getItem("asmActive")}catch{}
+  const p=S.myPeople.find(x=>x.id===act)||S.myPeople[0]||null;S.person=p;
   const name=p?p.prenom+" "+p.nom:(S.user.displayName||S.user.email);
-  $("whoName").textContent=name;$("meLic").textContent=p?"Licence "+p.licence:(isAdmin()?"Licence à relier dans Membres":"");
+  $("whoName").textContent=name;
+  $("meLic").textContent=p?"Licence "+p.licence+(S.myPeople.length>1?" · "+S.myPeople.length+" profils":""):(isAdmin()?"Licence à relier dans Membres":"");
   $("meAv").textContent=initials(p?p.prenom+" "+p.nom:name);renderProfile();
 }
+function setActive(pid){try{localStorage.setItem("asmActive",pid)}catch{}loadMe()}
 function myTeams(){const p=S.person;return p?[...new Set([...(p.equipes||[]),...(p.coach||[])])]:[]}
 function mentions(x){const p=S.person;if(!p)return false;const t=norm([x.match,x.arb,x.table,x.resp].join(" "));const pr=norm(p.prenom.split(" ")[0]),nm=norm(p.nom);return t.includes(pr+" "+nm)||t.includes(nm+" "+pr)}
 function renderProfile(){
   if($("prof").classList.contains("hide"))return;
   const p=S.person;const name=$("whoName").textContent;
   $("profAv").textContent=$("meAv").textContent;$("profName").textContent=name;
+  const many=(S.myPeople||[]).length>1;show("profSwitch",many);
+  if(many)$("profSwitch").innerHTML='<p>Profils reliés à votre compte :</p>'+S.myPeople.map(x=>`<button type="button" data-act="${esc(x.id)}" class="${p&&x.id===p.id?"on":""}" aria-pressed="${p&&x.id===p.id}"><span class="av">${esc(initials(x.prenom+" "+x.nom))}</span>${esc(x.prenom)}</button>`).join("");
   const teams=myTeams();
   $("profMeta").textContent=p?["Licence "+p.licence,(p.equipes||[]).length?"Joue en "+p.equipes.join(", "):"",(p.coach||[]).length?"Coach "+p.coach.join(", "):""].filter(Boolean).join(" · "):"Compte pas encore relié à un licencié : demandez à un admin.";
   const ms=S.matches.filter(m=>m.date>=today&&teams.includes(m.team)).sort((a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time));
@@ -96,6 +102,7 @@ function renderProfile(){
   $("profEvents").innerHTML=ev.length?ev.map(v=>`<div class="pl"><div class="when">${esc(dayLabel(v.date))}</div><div><b>${esc(v.t)}</b><p class="note">${esc(v.s)}</p></div></div>`).join(""):'<div class="empty">Rien de prévu pour le moment.</div>';
 }
 $("meBtn").onclick=()=>{show("prof",true);renderProfile();$("profClose").focus()};
+$("profSwitch").onclick=e=>{const b=e.target.closest("[data-act]");if(b)setActive(b.dataset.act)};
 $("profClose").onclick=()=>show("prof",false);
 $("prof").onclick=e=>{if(e.target.id==="prof")show("prof",false)};
 addEventListener("keydown",e=>{if(e.key==="Escape")show("prof",false)});
@@ -261,12 +268,17 @@ function renderMembers(){
   const order={pending:0,staff:1,admin:2};
   const list=[...S.members].sort((a,b)=>(order[a.role]??0)-(order[b.role]??0)||(a.at||0)-(b.at||0));
   if(!list.length){$("memList").innerHTML='<div class="empty">Personne pour l\'instant.</div>';return}
-  $("memList").innerHTML=list.map(m=>{const p=m.person&&S.pmap[m.person];return`<div class="mem"><div><b>${esc(m.name||m.email)}</b>${m.role==="pending"?' <span class="tag dom">À valider</span>':""}<small>${esc(m.email)}${p?" · "+esc(p.prenom+" "+p.nom+" · "+p.licence):""}</small></div>
-    <div class="acts"><input list="peopleList" data-link="${esc(m.id)}" placeholder="Relier à un licencié" aria-label="Licencié" value="${p?esc(p.prenom+" "+p.nom+" · "+p.licence):""}">${m.email===SUPER_ADMIN?'<span class="tag">Admin principal</span>':`<select data-mem="${esc(m.id)}" aria-label="Rôle"><option value="pending"${m.role==="pending"?" selected":""}>En attente</option><option value="player"${m.role==="player"?" selected":""}>Joueur</option><option value="staff"${m.role==="staff"?" selected":""}>Staff</option><option value="admin"${m.role==="admin"?" selected":""}>Admin</option></select><button class="sm x" data-delm="${esc(m.id)}">Retirer</button>`}</div></div>`}).join("");
+  $("memList").innerHTML=list.map(m=>{const ps=linked(m).map(id=>S.pmap[id]||{id,prenom:"",nom:id,licence:id});return`<div class="mem"><div><b>${esc(m.name||m.email)}</b>${m.role==="pending"?' <span class="tag dom">À valider</span>':""}<small>${esc(m.email)}</small><div>${ps.map(p=>`<span class="lk">${esc((p.prenom+" "+p.nom).trim()+" · "+p.licence)}<button type="button" data-unlink="${esc(m.id)}" data-pid="${esc(p.id)}" aria-label="Retirer ce licencié">×</button></span>`).join("")}</div></div>
+    <div class="acts"><input list="peopleList" data-link="${esc(m.id)}" placeholder="${ps.length?"Ajouter un autre licencié":"Relier à un licencié"}" aria-label="Ajouter un licencié" value="">${m.email===SUPER_ADMIN?'<span class="tag">Admin principal</span>':`<select data-mem="${esc(m.id)}" aria-label="Rôle"><option value="pending"${m.role==="pending"?" selected":""}>En attente</option><option value="player"${m.role==="player"?" selected":""}>Joueur</option><option value="staff"${m.role==="staff"?" selected":""}>Staff</option><option value="admin"${m.role==="admin"?" selected":""}>Admin</option></select><button class="sm x" data-delm="${esc(m.id)}">Retirer</button>`}</div></div>`}).join("");
   const p=list.filter(m=>m.role==="pending").length;$("navMembres").textContent=p?`Membres (${p})`:"Membres";
 }
 $("memList").addEventListener("change",async e=>{const i=e.target.closest("[data-link]");if(!i)return;const lic=(i.value.split("·").pop()||"").trim();
-  if(i.value&&!S.pmap[lic]){toast("Choisissez un licencié dans la liste");return}
-  if(await safe(updateDoc(doc(db,"members",i.dataset.link),{person:i.value?lic:null}))!==false)toast(i.value?"Compte relié à "+S.pmap[lic].prenom+" "+S.pmap[lic].nom:"Liaison retirée")});
+  if(!i.value)return;if(!S.pmap[lic]){toast("Choisissez un licencié dans la liste");return}
+  const m=S.members.find(x=>x.id===i.dataset.link);const upd={persons:arrayUnion(lic)};if(!m||!m.person)upd.person=lic;
+  if(m&&m.person&&!(m.persons||[]).includes(m.person))upd.persons=arrayUnion(m.person,lic);
+  if(await safe(updateDoc(doc(db,"members",i.dataset.link),upd))!==false)toast("Compte relié à "+S.pmap[lic].prenom+" "+S.pmap[lic].nom)});
+$("memList").addEventListener("click",async e=>{const b=e.target.closest("[data-unlink]");if(!b)return;const m=S.members.find(x=>x.id===b.dataset.unlink);if(!m)return;
+  const rest=linked(m).filter(id=>id!==b.dataset.pid);
+  if(await safe(updateDoc(doc(db,"members",m.id),{persons:rest,person:rest[0]||null}))!==false)toast("Licencié retiré de ce compte")});
 $("memList").onchange=async e=>{const s=e.target.closest("[data-mem]");if(s&&await safe(updateDoc(doc(db,"members",s.dataset.mem),{role:s.value}))!==false)toast("Rôle mis à jour")};
 $("memList").onclick=async e=>{const b=e.target.closest("[data-delm]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"members",b.dataset.delm)))}};
