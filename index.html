@@ -145,6 +145,14 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
 .pl .note{margin:2px 0 0}
 body.player .w,body.player button.x,body.player #seedBtn{display:none!important}
 .mem input{width:auto;min-width:16em}
+.sw2{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+.sw2 button{display:flex;align-items:center;gap:8px;min-height:44px;padding:4px 12px 4px 4px;border-radius:30px;border:2px solid var(--line);text-transform:none;font:600 15px Barlow,sans-serif}
+.sw2 button .av{width:32px;height:32px;font-size:13px;border-width:2px}
+.sw2 button.on{border-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--bg))}
+.sw2 p{width:100%;margin:0;font-size:13px;color:var(--mut)}
+.lk{display:inline-flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--line);padding:2px 4px 2px 10px;font-size:13px;margin:4px 4px 0 0}
+.lk button{min-height:28px;padding:0 8px;border:0;background:transparent;color:var(--mut);font-size:15px}
+.chip .cnt{font:600 11px Barlow,sans-serif;color:var(--redInk);text-transform:none}
 #fTeam{width:auto;min-width:14em}
 .who{margin-left:auto;position:relative;z-index:1;text-align:right;font-size:14px}
 .who button{margin-top:6px}
@@ -286,7 +294,7 @@ body.player .w,body.player button.x,body.player #seedBtn{display:none!important}
 </section>
 
 <section id="v-membres" class="hide">
-  <div class="bar"><div><h2>Membres</h2><p class="note">Validez les personnes qui demandent l'accès. Staff : bureau, coachs, commission technique. Joueur : voit son profil, les convocations, les matchs, les événements et les tours de salle. Admin : peut aussi valider les autres. Reliez chaque compte à son licencié pour afficher son numéro de licence et ses matchs.</p></div></div>
+  <div class="bar"><div><h2>Membres</h2><p class="note">Validez les personnes qui demandent l'accès. Staff : bureau, coachs, commission technique. Joueur : voit son profil, les convocations, les matchs, les événements et les tours de salle. Admin : peut aussi valider les autres. Reliez chaque compte à son ou ses licenciés (un parent peut être relié à son profil et à ceux de ses enfants) pour afficher licence, matchs et tours de salle.</p></div></div>
   <div id="memList"></div>
 </section>
 </main>
@@ -312,6 +320,7 @@ body.player .w,body.player button.x,body.player #seedBtn{display:none!important}
 <div id="prof" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="profName"><div class="sheet">
   <button type="button" class="sm close" id="profClose">Fermer</button>
   <div class="ph"><span class="av big" id="profAv"></span><div><h2 id="profName"></h2><p class="note" id="profMeta"></p></div></div>
+  <div class="sw2 hide" id="profSwitch"></div>
   <h3 class="sub">Mes matchs</h3><div id="profMatches"></div>
   <h3 class="sub">Mes tours de salle</h3><div id="profDuties"></div>
   <h3 class="sub">À venir au club</h3><div id="profEvents"></div>
