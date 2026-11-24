@@ -55,6 +55,7 @@ onAuthStateChanged(auth,async u=>{
 function start(){
   setStatus("chargement…");
   const live=(name,key,after)=>unsubs.push(onSnapshot(collection(db,name),s=>{S[key]=s.docs.map(d=>({id:d.id,...d.data()}));setStatus("à jour, en direct");after()},e=>{console.error(e);setStatus("connexion perdue, rechargez la page")}));
+  loadShopImgs();
   live("conv","conv",()=>{renderConv();renderTally();renderProfile();renderEvents()});
   live("matches","matches",()=>{renderMatches();renderTally();renderWeek();renderProfile()});
   live("events","events",()=>{renderEvents();renderWeek();renderProfile()});
@@ -63,9 +64,9 @@ function start(){
     live("msgs","msgs",()=>{renderCats();renderMsgs()});
     live("tasks","tasks",()=>{renderTasks();renderWeek()});
     live("meetings","meetings",()=>{renderMeetings();renderWeek();renderProfile()});
-    live("people","people",()=>{S.pmap=Object.fromEntries(S.people.map(p=>[p.id,p]));$("peopleList").innerHTML=S.people.map(p=>`<option value="${esc(p.prenom+" "+p.nom+" · "+p.id)}">`).join("");loadMe();if(isAdmin())renderMembers()});
+    live("people","people",()=>{renderClub();S.pmap=Object.fromEntries(S.people.map(p=>[p.id,p]));$("peopleList").innerHTML=S.people.map(p=>`<option value="${esc(p.prenom+" "+p.nom+" · "+p.id)}">`).join("");loadMe();if(isAdmin())renderMembers()});
   }
-  unsubs.push(onSnapshot(collection(db,"meta"),qs=>{const t={};qs.docs.forEach(d=>{const x=d.data();if(d.id.startsWith("cl_"))t[x.team||d.id.slice(3)]=x;else if(d.id==="classement"){const k=x.team||String(x.title||"").split(" · ")[0].trim();if(k&&!t[k])t[k]=x}});S.tables=t;renderMatches()},()=>{}));
+  unsubs.push(onSnapshot(collection(db,"meta"),qs=>{const t={};qs.docs.forEach(d=>{const x=d.data();if(d.id==="club"){S.club=x;return}if(d.id.startsWith("cl_"))t[x.team||d.id.slice(3)]=x;else if(d.id==="classement"){const k=x.team||String(x.title||"").split(" · ")[0].trim();if(k&&!t[k])t[k]=x}});S.tables=t;renderMatches();renderClub()},()=>{}));
   if(isAdmin())live("members","members",renderMembers);
 }
 /* ---------- Mon profil ---------- */
@@ -106,6 +107,61 @@ $("profSwitch").onclick=e=>{const b=e.target.closest("[data-act]");if(b)setActiv
 $("profClose").onclick=()=>show("prof",false);
 $("prof").onclick=e=>{if(e.target.id==="prof")show("prof",false)};
 addEventListener("keydown",e=>{if(e.key==="Escape")show("prof",false)});
+/* ---------- Le club ---------- */
+const CLUB0={
+ bureau:["Président : Raphaël Mistura","Correspondante FFBB : Clémence Denie","Dirigeante : Aude Cheneau","Dirigeante : Isabelle Cheneau","Dirigeante : Manon Cheneau","Dirigeant : Mikael De Brito Ventura","Dirigeante : Coralie Denie","Dirigeante : Karine Denie","Dirigeante : Darlène Gueno","Dirigeante : Claire Gueritte","Dirigeante : Laurence Guillore","Dirigeante : Magdalena Hougard","Dirigeante : Laetitia Le Bomin","Dirigeante : Julie Mistura"],
+ ct:[],
+ sal:["Éducateur sportif : Charles Saiter"],
+ coach:["Seniors F1 : Mikael De Brito Ventura","Seniors F1 : David Le Clair","U18F1 : Aline Nicol","U18F2 : Léa Troffigue","U18M : Charles Saiter","U15F : Hélène Denaire","U15F : Jade Tessier","U15M : Raphaël Mistura","U13F : Olivier Pichon","U13F2 : Alizé Denie","U13F2 : Clémence Denie","U13M : Charles Saiter","U11F1 : Emma Denaire","U11F1 : Pauline Hougard","U11F2 : Zoé Cartier","U11F2 : Alix Jarnaud","U11M1 : Jade Cayet","U11M1 : Hélène Cheraud","U11M2 : Agathe Le Tilly","U11M2 : Louise Lecocq"],
+ hist:["1979 : Création du club sous l'impulsion de Bernard Guillomet. Premier bureau : Jacqueline Terrien (présidente), Bernard Guillomet (secrétaire), Michel Bertho (trésorier).","1984 : 5 équipes, des poussines aux cadettes, et 63 licenciés. On parle déjà d'une salle à La Madeleine.","1994 : Pour les 15 ans du club, création des 2 premières équipes masculines.","1995 : 9 équipes, 95 licenciés ; les seniors filles d'Alain Malary montent en promotion honneur.","1999 : Première pierre de la salle de La Madeleine en février, première saison dans la salle en septembre (105 licenciés, 11 équipes).","2013 : Record de 140 licenciés et autant de garçons que de filles.","2018 : Premier emploi en CDI au club, avec Morgane Proust.","2019 : Entente seniors masculins avec Certé Trignac.","2022 : Record de 180 licenciés et 18 équipes ; Manon Cheneau succède à Hélène Denaire à la présidence.","2023 : Label national mini basket, record de 205 licenciés, ouverture du micro basket dès 4 ans."]};
+const clubData=()=>({...CLUB0,...(S.club||{})});
+const lines=t=>String(t||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+const split=l=>{const i=l.indexOf(":");return i<0?["",l.trim()]:[l.slice(0,i).trim(),l.slice(i+1).trim()]};
+function renderClub(){
+  if(!$("clubBody"))return;const C=clubData();
+  const org=(title,list,empty)=>`<div class="org"><h3>${esc(title)}</h3>${list.length?list.map(l=>{const[r,n]=split(l);return`<div class="person"><span class="av">${esc(initials(n))}</span><div>${esc(n)}<small>${esc(r)}</small></div></div>`}).join(""):`<p class="note">${esc(empty)}</p>`}</div>`;
+  const coachBy={};C.coach.forEach(l=>{const[t,n]=split(l);(coachBy[n]=coachBy[n]||[]).push(t)});
+  const coachList=Object.entries(coachBy).sort((a,b)=>a[0].localeCompare(b[0])).map(([n,t])=>t.join(", ")+" : "+n);
+  let trombi="";
+  if(!isPlayer()&&S.people?.length){const by={};S.people.forEach(p=>(p.equipes||[]).forEach(e=>(by[e]=by[e]||[]).push(p)));
+    const order=[...CATS.filter(c=>by[c]),...Object.keys(by).filter(c=>!CATS.includes(c)).sort()];
+    trombi=`<h3 class="sub">Trombinoscope</h3><p class="note">Visible par le staff. Les avatars aux couleurs du club remplaceront les initiales.</p>${order.map(t=>`<details><summary><b>${esc(t)}</b> <span class="note">· ${by[t].length}</span></summary><div class="trombi">${by[t].sort((a,b)=>a.nom.localeCompare(b.nom)).map(p=>`<div><span class="av">${esc(initials(p.prenom+" "+p.nom))}</span>${esc(p.prenom)} ${esc(p.nom)}</div>`).join("")}</div></details>`).join("")}`}
+  $("clubBody").innerHTML=`<div class="kpis"><div class="kpi"><b>1979</b><span>création du club</span></div><div class="kpi"><b>${S.people?.length||177}</b><span>licenciés cette saison</span></div><div class="kpi"><b>16</b><span>équipes en championnat FFBB</span></div><div class="kpi"><b>Label</b><span>national mini basket</span></div></div>
+  <div class="grid2"><div><h3 class="sub">Notre histoire</h3><ul class="timeline">${C.hist.map(l=>{const[y,t]=split(l);return`<li><b>${esc(y)}</b>${esc(t)}</li>`}).join("")}</ul><p><b>Et la suite ? À vous d'écrire l'histoire !</b></p></div>
+  <div><h3 class="sub">Nous trouver</h3><div class="panel contact"><div><b>Salle de La Madeleine</b><br>Rue Pierre de Coubertin<br>44410 Saint-Lyphard<br><span class="note">À mi-chemin entre Guérande et Saint-Lyphard</span></div><div><b>Contact</b><br><a href="tel:+33787349605">07 87 34 96 05</a><br><a href="mailto:aslamadeleinebasket@orange.fr">aslamadeleinebasket@orange.fr</a><br><a href="https://aslamadeleinebasket.fr" target="_blank" rel="noopener">aslamadeleinebasket.fr</a> · <a href="https://m.facebook.com/aslamadeleinebasket.fr/" target="_blank" rel="noopener">Facebook</a></div></div></div></div>
+  <h3 class="sub">Qui fait quoi</h3><div class="orgs">${org("Bureau",C.bureau,"À compléter.")}${org("Commission technique",C.ct,"À compléter en début de saison.")}${org("Salariés",C.sal,"À compléter.")}${org("Coachs",coachList,"À compléter.")}</div>${trombi}`;
+  if(S.cbFill!==JSON.stringify(C)){S.cbFill=JSON.stringify(C);$("cb_bureau").value=C.bureau.join("\n");$("cb_ct").value=C.ct.join("\n");$("cb_sal").value=C.sal.join("\n");$("cb_coach").value=C.coach.join("\n");$("cb_hist").value=C.hist.join("\n")}
+}
+$("clubForm").onsubmit=async e=>{e.preventDefault();if(await safe(setDoc(doc(db,"meta","club"),{bureau:lines($("cb_bureau").value),ct:lines($("cb_ct").value),sal:lines($("cb_sal").value),coach:lines($("cb_coach").value),hist:lines($("cb_hist").value),updated:today}))!==false){toast("Infos du club enregistrées");$("clubEdit").open=false}};
+$("cbReset").onclick=()=>{S.cbFill=null;const s=S.club;S.club=null;renderClub();S.club=s;toast("Infos d'origine remises dans le formulaire : enregistrez pour valider")};
+
+/* ---------- Boutique ---------- */
+const SHOP=[["brizzo","Brizzo","T-shirt homme et junior",25,20,"tee"],["brizza","Brizza","T-shirt femme",25,null,"f"],["danco","Danco","Maillot",25,25,"tee"],["dumpo","Dumpo","Short",20,20,"tee"],["giordi","Giordi","Sweat à capuche",50,45,"tee"],["giordizi","Giordizi","Veste zippée à capuche",55,50,"tee"],["gaudo","Gaudo","Pantalon",40,35,"tee"],["gamberto","Gamberto","Sac à dos",40,null,"u"],["grenno","Grenno","Sac de sport L",40,null,"u"],["eleno","Eleno","Chaussettes, lot de 3 même couleur (sans logo)",21,null,"pt"],["orvieto","Orvieto","Gourde (sans logo)",8,null,"u"],["bracelet","Bracelet éponge","À l'unité (sans logo)",5,null,"u"]];
+const SIZES={tee:["Adulte S","Adulte M","Adulte L","Adulte XL","Adulte 2XL","Adulte 3XL","Junior 6 ans","Junior 8 ans","Junior 10 ans","Junior 12 ans","Junior 14 ans"],f:["XS","S","M","L","XL","2XL"],pt:["27-30","31-34","35-38","39-42","43-46","47-52"],u:["Taille unique"]};
+S.cart=[];
+function renderShop(){
+  $("shopList").innerHTML=SHOP.map(([id,n,d,ad,jr,sz])=>`<div class="prod"><img src="${S.shopImg?.[id]||""}" alt="${esc(n)}" loading="lazy"><div class="in"><h3>${esc(n)}</h3><div class="note">${esc(d)}</div><div class="px">${jr&&jr!==ad?`${ad} € <span class="note">adulte</span> · ${jr} € <span class="note">junior</span>`:`${ad} €`}</div>
+    <div class="row"><select data-sz="${id}" aria-label="Taille">${SIZES[sz].map(s=>`<option>${esc(s)}</option>`).join("")}</select><input type="number" min="1" value="1" data-q="${id}" aria-label="Quantité"></div>
+    ${sz==="u"||sz==="pt"?"":`<input data-perso="${id}" placeholder="Nom au dos (+8 €) ou initiales (+4,5 €)" aria-label="Personnalisation">`}
+    <button class="sm pri" data-add="${id}">Ajouter au panier</button></div></div>`).join("")+`<div class="prod"><img src="${S.shopImg?.guide||""}" alt="Guide des tailles Kappa" loading="lazy"><div class="in"><h3>Guide des tailles</h3><div class="note">Adulte homme S à 3XL, femme XS à 2XL, junior 6 à 14 ans, pointures 27 à 52. Personnalisation : nom au dos 8 €, initiales 4,5 €.</div><a class="sm" href="https://aslamadeleinebasket.fr/boutique-club" target="_blank" rel="noopener">Voir sur le site du club</a></div></div>`;
+  renderCart()}
+function renderCart(){
+  if(!S.cart.length){$("cart").innerHTML='<h3>Mon panier</h3><p class="note" style="color:#cfcfcf">Votre panier est vide.</p>';return}
+  const tot=S.cart.reduce((s,c)=>s+c.px*c.q,0);
+  const who=$("whoName")?.textContent||"";
+  const body=`Bonjour,\n\nJe souhaite commander :\n`+S.cart.map(c=>`- ${c.q} x ${c.n} (${c.sz})${c.perso?" – perso : "+c.perso:""} : ${(c.px*c.q).toFixed(2).replace(".",",")} €`).join("\n")+`\n\nTotal : ${tot.toFixed(2).replace(".",",")} €\n\n${who}`;
+  $("cart").innerHTML=`<h3>Mon panier</h3><ul>${S.cart.map((c,i)=>`<li>${c.q} × ${esc(c.n)} · ${esc(c.sz)}${c.perso?` · « ${esc(c.perso)} »`:""} — <b>${(c.px*c.q).toFixed(2).replace(".",",")} €</b> <button class="sm rm" data-rm="${i}">Retirer</button></li>`).join("")}</ul><div class="tot">Total : ${tot.toFixed(2).replace(".",",")} €</div>
+  <a class="btn" href="mailto:aslamadeleinebasket@orange.fr?subject=${encodeURIComponent("Commande boutique ASM Basket")}&body=${encodeURIComponent(body)}">Envoyer la commande au club</a><button class="sm" data-copycart="1" style="background:#fff;color:#111">Copier le récapitulatif</button>
+  <p class="note" style="color:#cfcfcf">Le règlement et le retrait se font auprès du club.</p>`;S.cartTxt=body}
+$("v-boutique").addEventListener("click",async e=>{const a=e.target.closest("[data-add]");if(a){const id=a.dataset.add,p=SHOP.find(x=>x[0]===id),sz=$("v-boutique").querySelector(`[data-sz="${id}"]`).value,q=Math.max(1,+$("v-boutique").querySelector(`[data-q="${id}"]`).value||1),pe=($("v-boutique").querySelector(`[data-perso="${id}"]`)?.value||"").trim();
+    const jr=sz.startsWith("Junior")&&p[4]?p[4]:p[3];const extra=pe?(pe.replace(/[^A-Za-zÀ-ÿ]/g,"").length<=3?4.5:8):0;S.cart.push({n:p[1],sz,q,perso:pe,px:jr+extra});renderCart();toast(p[1]+" ajouté au panier");return}
+  const r=e.target.closest("[data-rm]");if(r){S.cart.splice(+r.dataset.rm,1);renderCart();return}
+  if(e.target.closest("[data-copycart]")){try{await navigator.clipboard.writeText(S.cartTxt);toast("Récapitulatif copié")}catch{toast("Copie impossible sur cet appareil")}}});
+try{S.shopImg=JSON.parse(localStorage.getItem("asmShopImg")||"null")}catch{}
+renderShop();
+async function loadShopImgs(){try{const d=await getDoc(doc(db,"assets","shop"));if(d.exists()){const x=d.data();if(x.v!==S.shopImg?.v){S.shopImg={...x.img,v:x.v};try{localStorage.setItem("asmShopImg",JSON.stringify(S.shopImg))}catch{}renderShop()}}}catch{}}
+window.asmPutAsset=async(id,data)=>{if(!isAdmin())return"réservé aux admins";await setDoc(doc(db,"assets",id),data);await loadShopImgs();return"ok"};
+
 /* ---------- Appli installable ---------- */
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 let installEvt=null;const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
@@ -127,7 +183,7 @@ async function importSeed(){const b=writeBatch(db);for(const [col,docs] of Objec
   if(await safe(b.commit())!==false)toast("Données de départ importées")}
 
 /* ---------- Navigation ---------- */
-const VIEWS=["evenements","convocations","matchs","echanges","taches","salle","membres"];
+const VIEWS=["evenements","convocations","matchs","echanges","club","boutique","taches","salle","membres"];
 function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v)||(v==="membres"&&!isAdmin())||(isPlayer()&&["echanges","taches"].includes(v)))v="evenements";
   VIEWS.forEach(x=>show("v-"+x,x===v));document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===v))}
 addEventListener("hashchange",route);
