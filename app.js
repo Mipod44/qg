@@ -55,7 +55,7 @@ onAuthStateChanged(auth,async u=>{
 function start(){
   setStatus("chargement…");
   const live=(name,key,after)=>unsubs.push(onSnapshot(collection(db,name),s=>{S[key]=s.docs.map(d=>({id:d.id,...d.data()}));setStatus("à jour, en direct");after()},e=>{console.error(e);setStatus("connexion perdue, rechargez la page")}));
-  live("conv","conv",()=>{renderConv();renderTally();renderProfile()});
+  live("conv","conv",()=>{renderConv();renderTally();renderProfile();renderEvents()});
   live("matches","matches",()=>{renderMatches();renderTally();renderWeek();renderProfile()});
   live("events","events",()=>{renderEvents();renderWeek();renderProfile()});
   live("duties","duties",()=>{renderDuties();renderWeek();renderProfile()});
@@ -81,7 +81,7 @@ async function loadMe(){
   $("meLic").textContent=p?"Licence "+p.licence+(S.myPeople.length>1?" · "+S.myPeople.length+" profils":""):(isAdmin()?"Licence à relier dans Membres":"");
   $("meAv").textContent=initials(p?p.prenom+" "+p.nom:name);renderProfile();renderMatches();
 }
-function setActive(pid){try{localStorage.setItem("asmActive",pid)}catch{}loadMe()}
+function setActive(pid){try{localStorage.setItem("asmActive",pid);localStorage.removeItem("asmTeam")}catch{}S.team=null;loadMe()}
 function myTeams(){const p=S.person;return p?[...new Set([...(p.equipes||[]),...(p.coach||[])])]:[]}
 function mentions(x){const p=S.person;if(!p)return false;const t=norm([x.match,x.arb,x.table,x.resp].join(" "));const pr=norm(p.prenom.split(" ")[0]),nm=norm(p.nom);return t.includes(pr+" "+nm)||t.includes(nm+" "+pr)}
 function renderProfile(){
@@ -98,7 +98,7 @@ function renderProfile(){
   const du=S.duties.filter(x=>x.date>=today&&mentions(x)).sort((a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time));
   $("profDuties").innerHTML=du.length?du.map(x=>{const pr=norm(S.person.prenom.split(" ")[0]);const role=[["arb","Arbitrage"],["table","Table de marque"],["resp","Responsable de salle"]].filter(([k])=>norm(x[k]).includes(pr)).map(r=>r[1]).join(", ")||"Tour de salle";
     return`<div class="pl"><div class="when">${esc(dayLabel(x.date))}<span>${esc(x.time||"")}</span></div><div><b>${esc(role)}</b><p class="note">${esc(x.match||"")}</p></div></div>`}).join(""):`<div class="empty">Aucun tour de salle à votre nom.</div>`;
-  const ev=[...S.events.filter(v=>v.date>=today).map(v=>({date:v.date,t:v.title,s:v.place||""})),...(isPlayer()?[]:S.meetings.filter(m=>m.date>=today).map(m=>({date:m.date,t:m.body,s:[m.time,m.place].filter(Boolean).join(" · ")})))].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
+  const ev=[...S.events.filter(v=>v.date>=today&&v.kind!=="actu").map(v=>({date:v.date,t:v.title,s:v.place||""})),...(isPlayer()?[]:S.meetings.filter(m=>m.date>=today).map(m=>({date:m.date,t:m.body,s:[m.time,m.place].filter(Boolean).join(" · ")})))].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
   $("profEvents").innerHTML=ev.length?ev.map(v=>`<div class="pl"><div class="when">${esc(dayLabel(v.date))}</div><div><b>${esc(v.t)}</b><p class="note">${esc(v.s)}</p></div></div>`).join(""):'<div class="empty">Rien de prévu pour le moment.</div>';
 }
 $("meBtn").onclick=()=>{show("prof",true);renderProfile();$("profClose").focus()};
@@ -115,13 +115,20 @@ if(isIOS&&!standalone)show("installBtn",true);
 $("installBtn").onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice.catch(()=>{});installEvt=null;show("installBtn",false)}
   else{const el=$("toast");el.textContent="Sur iPhone : ouvrez ce site dans Safari, touchez Partager puis « Sur l'écran d'accueil ».";el.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>el.style.display="none",8000)}};
 addEventListener("appinstalled",()=>show("installBtn",false));
+window.asmSyncFFBB=async(data)=>{if(!isAdmin())return"réservé aux admins";const rep={tables:0,added:0,scored:0,same:0,diff:[]};
+  for(const [team,t] of Object.entries(data.tables||{})){await setDoc(doc(db,"meta","cl_"+team),{team,title:t.title,rows:t.rows,note:t.note||"",updated:today,src:"ffbb"});rep.tables++}
+  for(const m of data.played||[]){const ex=S.matches.filter(x=>x.team===m.team&&x.date===m.date);
+    if(!ex.length){await addDoc(collection(db,"matches"),{date:m.date,team:m.team,opp:m.opp,home:m.home,time:m.time,us:m.us,them:m.them,status:"fin",src:"ffbb"});rep.added++;continue}
+    for(const x of ex){if(x.status==="fin"){if(x.us===m.us&&x.them===m.them)rep.same++;else rep.diff.push(`${m.team} ${m.date} : appli ${x.us}-${x.them}, FFBB ${m.us}-${m.them}`)}
+      else{await updateDoc(doc(db,"matches",x.id),{us:m.us,them:m.them,status:"fin"});rep.scored++}}}
+  return rep};
 window.asmImportPeople=async list=>{if(!isAdmin())return"admin requis";for(let i=0;i<list.length;i+=400){const b=writeBatch(db);list.slice(i,i+400).forEach(p=>{const{licence,...rest}=p;b.set(doc(db,"people",licence),{licence,...rest})});await b.commit()}return list.length+" licenciés importés"};
 async function importSeed(){const b=writeBatch(db);for(const [col,docs] of Object.entries(SEED))for(const [id,data] of Object.entries(docs))b.set(doc(db,col,id),data);
   if(await safe(b.commit())!==false)toast("Données de départ importées")}
 
 /* ---------- Navigation ---------- */
-const VIEWS=["convocations","matchs","echanges","evenements","taches","salle","membres"];
-function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v)||(v==="membres"&&!isAdmin())||(isPlayer()&&["echanges","taches"].includes(v)))v="convocations";
+const VIEWS=["evenements","convocations","matchs","echanges","taches","salle","membres"];
+function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v)||(v==="membres"&&!isAdmin())||(isPlayer()&&["echanges","taches"].includes(v)))v="evenements";
   VIEWS.forEach(x=>show("v-"+x,x===v));document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===v))}
 addEventListener("hashchange",route);
 
@@ -158,7 +165,7 @@ $("convForm").onsubmit=async e=>{e.preventDefault();
 
 /* ---------- Matchs ---------- */
 S.tables={};S.team=null;
-const teamList=()=>{const s=new Set([...S.matches.map(m=>m.team),...Object.keys(S.tables||{})].filter(Boolean));return[...CATS.filter(c=>s.has(c)),...[...s].filter(c=>!CATS.includes(c)).sort()]};
+const teamList=()=>{const s=new Set([...S.matches.map(m=>m.team),...Object.keys(S.tables||{}),...myTeams().filter(x=>CATS.includes(x))].filter(Boolean));return[...CATS.filter(c=>s.has(c)),...[...s].filter(c=>!CATS.includes(c)).sort()]};
 function curTeam(){const L=teamList();let t=S.team;if(t==null){try{t=localStorage.getItem("asmTeam")}catch{}}
   if(t&&t!=="all"&&!L.includes(t))t=null;if(!t)t=myTeams().find(x=>L.includes(x))||"all";return t}
 function matchRow(m){
@@ -223,13 +230,25 @@ $("msgForm").onsubmit=async e=>{e.preventDefault();const t=$("m_text").value.tri
   if(await safe(addDoc(collection(db,"msgs"),{cat:S.cat,text:t,author:S.user.uid,who:S.user.displayName||S.user.email,ts:Date.now()}))!==false)$("m_text").value=""};
 
 /* ---------- Événements ---------- */
+function weekPosts(){
+  const days=[...new Set(S.conv.map(c=>c.date))].filter(d=>d>=today&&(new Date(d+"T12:00")-new Date(today+"T12:00"))/864e5<=3).sort();
+  const JL=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+  return days.map(d=>{const L=S.conv.filter(c=>c.date===d).sort((a,b)=>tmin(a.match)-tmin(b.match));const dom=L.filter(c=>c.home),ext=L.filter(c=>!c.home);
+    const x=new Date(d+"T12:00"),jour=JL[x.getDay()],lab=jour+" "+x.getDate()+" "+MOIS[x.getMonth()];
+    const when=d===today?"Aujourd'hui":(new Date(d+"T12:00")-new Date(today+"T12:00"))/864e5===1?"Demain":"Ce "+jour;
+    const txt=`ALERTE MATCHS · ${lab.toUpperCase()}\n${L.length} match${L.length>1?"s":""} pour l'AS La Madeleine !\n`+(dom.length?`\nÀ DOMICILE, salle de La Madeleine :\n`+dom.map(c=>`· ${c.match} ${c.team} contre ${c.opp}`).join("\n")+"\n":"")+(ext.length?`\nÀ L'EXTÉRIEUR :\n`+ext.map(c=>`· ${c.match} ${c.team} chez ${c.opp}`).join("\n")+"\n":"")+`\nVenez nombreux encourager nos équipes ! Allez La Madeleine !`;
+    return`<article class="wk"><div class="k">${esc(when)} · alerte matchs</div><h3>${esc(lab)} : ${L.length} match${L.length>1?"s":""}</h3><div class="cols">${dom.length?`<div><h4>À domicile · salle de La Madeleine</h4><ul>${dom.map(c=>`<li><b>${esc(c.match)}</b>${esc(c.team)} contre ${esc(c.opp)}</li>`).join("")}</ul></div>`:""}${ext.length?`<div><h4>À l'extérieur</h4><ul>${ext.map(c=>`<li><b>${esc(c.match)}</b>${esc(c.team)} chez ${esc(c.opp)}</li>`).join("")}</ul></div>`:""}</div><p class="cta">${dom.length?"Venez nous soutenir à la salle !":"Soutenez nos équipes en déplacement !"}</p><button type="button" class="sm" data-copy="${esc(txt)}">Copier le texte pour Facebook / WhatsApp</button></article>`}).join("")}
 function renderEvents(){
-  const list=[...S.events].sort((a,b)=>a.date.localeCompare(b.date));
-  if(!list.length){$("evList").innerHTML='<div class="empty">Aucun événement au planning. Ajoutez le prochain tournoi ou plateau ci-dessous.</div>';return}
-  $("evList").innerHTML=list.map(v=>{const x=new Date(v.date+"T12:00");return`<div class="ev" style="${v.date<today?"opacity:.55":""}"><div class="d">${x.getDate()}<span>${MOIS[x.getMonth()]}</span></div><div><h3>${esc(v.title)}</h3><div class="note">${[v.place,v.owner&&("Responsable : "+v.owner)].filter(Boolean).map(esc).join(" · ")}</div>${v.notes?`<p style="margin:6px 0 0">${esc(v.notes)}</p>`:""}</div><button class="sm x" data-dele="${esc(v.id)}">Suppr.</button></div>`}).join("")}
-$("evList").onclick=async e=>{const b=e.target.closest("[data-dele]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"events",b.dataset.dele)))}};
+  $("wkPosts").innerHTML=weekPosts();
+  const ev=S.events.filter(v=>v.kind!=="actu"),news=S.events.filter(v=>v.kind==="actu").sort((a,b)=>b.date.localeCompare(a.date));
+  const row=v=>{const x=new Date(v.date+"T12:00");return`<div class="ev"><div class="d">${x.getDate()}<span>${MOIS[x.getMonth()]}</span></div><div><h3>${esc(v.title)}</h3><div class="note">${[v.place,v.owner&&("Responsable : "+v.owner)].filter(Boolean).map(esc).join(" · ")}</div>${v.notes?`<p style="margin:6px 0 0">${esc(v.notes)}</p>`:""}</div><button class="sm x" data-dele="${esc(v.id)}">Suppr.</button></div>`};
+  const up=ev.filter(v=>v.date>=today).sort((a,b)=>a.date.localeCompare(b.date)),past=ev.filter(v=>v.date<today).sort((a,b)=>b.date.localeCompare(a.date));
+  $("evList").innerHTML=(up.length?up.map(row).join(""):'<div class="empty">Aucun événement à venir.</div>')+(past.length?`<details><summary class="note">Événements passés (${past.length})</summary>${past.map(row).join("")}</details>`:"");
+  $("newsList").innerHTML=news.length?news.map(v=>`<div class="news"><div class="note">${esc(dayLabel(v.date))}</div><h3>${esc(v.title)}</h3>${v.notes?`<p>${esc(v.notes)}</p>`:""}<button class="sm x" data-dele="${esc(v.id)}">Suppr.</button></div>`).join(""):'<div class="empty">Pas encore d\'actu publiée.</div>'}
+$("v-evenements").addEventListener("click",async e=>{const c=e.target.closest("[data-copy]");if(c){try{await navigator.clipboard.writeText(c.dataset.copy);toast("Texte copié : collez-le sur Facebook ou WhatsApp")}catch{toast("Copie impossible sur cet appareil")}return}
+  const b=e.target.closest("[data-dele]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"events",b.dataset.dele)))}});
 $("evForm").onsubmit=async e=>{e.preventDefault();
-  if(await safe(addDoc(collection(db,"events"),{date:$("e_date").value,title:$("e_title").value.trim(),place:$("e_place").value.trim(),owner:$("e_owner").value.trim(),notes:$("e_notes").value.trim()}))!==false)e.target.reset()};
+  if(await safe(addDoc(collection(db,"events"),{kind:$("e_kind").value,date:$("e_date").value,title:$("e_title").value.trim(),place:$("e_place").value.trim(),owner:$("e_owner").value.trim(),notes:$("e_notes").value.trim()}))!==false)e.target.reset()};
 
 /* ---------- Tâches ---------- */
 function renderTasks(){
@@ -265,7 +284,7 @@ function renderWeek(){
   const now=new Date();const mon=new Date(now);mon.setHours(12,0,0,0);mon.setDate(now.getDate()-((now.getDay()+6)%7));const td=iso(now);
   $("week").innerHTML=DAYS.map((name,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);const ds=iso(d);const items=[];
     S.meetings.filter(m=>m.date===ds).sort((a,b)=>tmin(a.time)-tmin(b.time)).forEach(m=>items.push(`<li class="k-meet">${esc([m.time,m.body].filter(Boolean).join(" · "))}</li>`));
-    S.events.filter(v=>v.date===ds).forEach(v=>items.push(`<li class="k-ev">${esc(v.title)}</li>`));
+    S.events.filter(v=>v.date===ds&&v.kind!=="actu").forEach(v=>items.push(`<li class="k-ev">${esc(v.title)}</li>`));
     S.tasks.filter(t=>t.freq==="Chaque semaine"&&norm(t.when).includes(norm(name))).forEach(t=>items.push(`<li class="k-task ${t.done?"done":""}">${esc(t.title)}</li>`));
     const ms=S.matches.filter(m=>m.date===ds);if(ms.length){const h=ms.filter(m=>m.home).length;items.push(`<li class="k-info">${ms.length} match${ms.length>1?"s":""}${h?`, ${h} à domicile`:""}</li>`)}
     const du=S.duties.filter(x=>x.date===ds).length;if(du)items.push(`<li class="k-info">${du} créneau${du>1?"x":""} de tour de salle</li>`);
