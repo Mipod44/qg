@@ -65,7 +65,7 @@ function start(){
     live("meetings","meetings",()=>{renderMeetings();renderWeek();renderProfile()});
     live("people","people",()=>{S.pmap=Object.fromEntries(S.people.map(p=>[p.id,p]));$("peopleList").innerHTML=S.people.map(p=>`<option value="${esc(p.prenom+" "+p.nom+" · "+p.id)}">`).join("");loadMe();if(isAdmin())renderMembers()});
   }
-  unsubs.push(onSnapshot(doc(db,"meta","classement"),d=>{S.table=d.exists()?d.data():null;renderMatches()},()=>{}));
+  unsubs.push(onSnapshot(collection(db,"meta"),qs=>{const t={};qs.docs.forEach(d=>{const x=d.data();if(d.id.startsWith("cl_"))t[x.team||d.id.slice(3)]=x;else if(d.id==="classement"){const k=x.team||String(x.title||"").split(" · ")[0].trim();if(k&&!t[k])t[k]=x}});S.tables=t;renderMatches()},()=>{}));
   if(isAdmin())live("members","members",renderMembers);
 }
 /* ---------- Mon profil ---------- */
@@ -79,7 +79,7 @@ async function loadMe(){
   const name=p?p.prenom+" "+p.nom:(S.user.displayName||S.user.email);
   $("whoName").textContent=name;
   $("meLic").textContent=p?"Licence "+p.licence+(S.myPeople.length>1?" · "+S.myPeople.length+" profils":""):(isAdmin()?"Licence à relier dans Membres":"");
-  $("meAv").textContent=initials(p?p.prenom+" "+p.nom:name);renderProfile();
+  $("meAv").textContent=initials(p?p.prenom+" "+p.nom:name);renderProfile();renderMatches();
 }
 function setActive(pid){try{localStorage.setItem("asmActive",pid)}catch{}loadMe()}
 function myTeams(){const p=S.person;return p?[...new Set([...(p.equipes||[]),...(p.coach||[])])]:[]}
@@ -157,20 +157,42 @@ $("convForm").onsubmit=async e=>{e.preventDefault();
   if(await safe(addDoc(collection(db,"conv"),c))!==false){await safe(addDoc(collection(db,"matches"),{date:c.date,team:c.team,opp:c.opp,home:c.home,time:c.match,us:null,them:null,status:"avenir"}));e.target.reset()}};
 
 /* ---------- Matchs ---------- */
-function renderMatches(){
-  const list=[...S.matches].sort((a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time));
-  if(!list.length)$("matchList").innerHTML='<div class="empty">Aucun match enregistré.</div>';else{
-  let out="",d="";
-  for(const m of list){if(m.date!==d){d=m.date;out+=`<div class="day">${esc(dayLabel(d))}</div>`}
+S.tables={};S.team=null;
+const teamList=()=>{const s=new Set([...S.matches.map(m=>m.team),...Object.keys(S.tables||{})].filter(Boolean));return[...CATS.filter(c=>s.has(c)),...[...s].filter(c=>!CATS.includes(c)).sort()]};
+function curTeam(){const L=teamList();let t=S.team;if(t==null){try{t=localStorage.getItem("asmTeam")}catch{}}
+  if(t&&t!=="all"&&!L.includes(t))t=null;if(!t)t=myTeams().find(x=>L.includes(x))||"all";return t}
+function matchRow(m){
     const st=m.status==="live"?'<span class="tag live">En direct</span>':m.status==="fin"?'<span class="tag fin">Terminé</span>':`<span class="tag plain">${esc(m.time||"")}</span>`;
     const res=m.status==="fin"&&m.us!=null&&m.them!=null?(m.us>m.them?" · Victoire":" · Défaite"):"";
-    out+=`<div class="match"><div><div class="eq">${esc(m.team)} <span>${m.home?"reçoit":"chez"} ${esc(m.opp)}</span></div><div>${st}<span class="note">${res}</span></div></div>
+    return `<div class="match"><div><div class="eq">${esc(m.team)} <span>${m.home?"reçoit":"chez"} ${esc(m.opp)}</span></div><div>${st}<span class="note">${res}</span></div></div>
     <div class="score" data-m="${esc(m.id)}"><input type="number" min="0" inputmode="numeric" aria-label="Score ASM" data-f="us" value="${m.us??""}"${m.status==="fin"?" disabled":""}><b>–</b><input type="number" min="0" inputmode="numeric" aria-label="Score adversaire" data-f="them" value="${m.them??""}"${m.status==="fin"?" disabled":""}>
       <select data-f="status" aria-label="Statut"${m.status==="fin"?" disabled":""}><option value="avenir"${m.status==="avenir"?" selected":""}>À venir</option><option value="live"${m.status==="live"?" selected":""}>En direct</option><option value="fin"${m.status==="fin"?" selected":""}>Terminé</option></select>${m.status==="fin"?'<span class="lock">Score validé</span>':""}</div><div class="cf hide" id="cf-${esc(m.id)}"></div></div>`}
-  $("matchList").innerHTML=out}
-  const t=S.table;
-  $("standings").innerHTML=t?`<h3>${esc(t.title)}</h3><table><thead><tr><th>#</th><th>Équipe</th><th class="n">Pts</th><th class="n">V-D</th></tr></thead><tbody>${(t.rows||[]).map((r,i)=>`<tr class="${/madeleine/i.test(r.eq)?"us":""}"><td>${i+1}</td><td>${esc(r.eq)}</td><td class="n">${esc(r.pts)}</td><td class="n">${esc(r.v)}-${esc(r.d)}</td></tr>`).join("")}</tbody></table>${t.note?`<p class="note">${esc(t.note)}</p>`:""}`:'<h3>Classement</h3><p class="note">Pas encore de classement saisi.</p>';
+function renderMatches(){
+  const L=teamList(),t=curTeam(),sel=$("teamSel");
+  sel.innerHTML='<option value="all">Toutes les équipes</option>'+L.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");sel.value=t;
+  const srt=(a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time);
+  const all=S.matches.filter(m=>t==="all"||m.team===t);
+  const up=all.filter(m=>m.status==="live"||(m.status!=="fin"&&m.date>=today)).sort(srt);
+  let past=all.filter(m=>!up.includes(m)).sort((a,b)=>srt(b,a)),hidden=0;
+  if(t==="all"){const lim=iso(new Date(Date.now()-8*864e5));const k=past.filter(m=>m.date>=lim);hidden=past.length-k.length;past=k}
+  const block=(list,hd)=>{if(!list.length)return"";let o=`<h3 class="sub">${hd}</h3>`,d="";for(const m of list){if(m.date!==d){d=m.date;o+=`<div class="day">${esc(dayLabel(d))}</div>`}o+=matchRow(m)}return o};
+  let out=block(up,"À venir et en direct")+block(past,t==="all"?"Derniers résultats":"Résultats de la saison");
+  if(hidden)out+=`<p class="note">${hidden} résultat${hidden>1?"s":""} plus ancien${hidden>1?"s":""} : choisissez une équipe pour voir toute sa saison.</p>`;
+  $("matchList").innerHTML=out||`<div class="empty">Aucun match ${t==="all"?"enregistré":"pour "+esc(t)}.</div>`;
+  const tb=t==="all"?null:(S.tables||{})[t];
+  $("standings").innerHTML=t==="all"?'<h3>Classement</h3><p class="note">Choisissez une équipe en haut pour afficher son classement.</p>':tb?`<h3>${esc(tb.title||t)}</h3><table><thead><tr><th>#</th><th>Équipe</th><th class="n">Pts</th><th class="n">V-D</th></tr></thead><tbody>${(tb.rows||[]).map((r,i)=>`<tr class="${/madeleine/i.test(r.eq)?"us":""}"><td>${i+1}</td><td>${esc(r.eq)}</td><td class="n">${esc(r.pts)}</td><td class="n">${esc(r.v)}-${esc(r.d)}</td></tr>`).join("")}</tbody></table>${tb.note?`<p class="note">${esc(tb.note)}</p>`:""}`:`<h3>Classement ${esc(t)}</h3><p class="note">Pas encore de classement saisi pour cette équipe.</p>`;
+  show("clEdit",t!=="all");
+  if(S.clFor!==t){S.clFor=t;$("cl_title").value=tb?.title||(t==="all"?"":t+" · ");$("cl_note").value=tb?.note||"";$("cl_rows").value=(tb?.rows||[]).map(r=>`${r.eq} ; ${r.pts} ; ${r.v} ; ${r.d}`).join("\n")}
 }
+$("teamSel").onchange=e=>{S.team=e.target.value;try{localStorage.setItem("asmTeam",S.team)}catch{}renderMatches()};
+function parseTable(txt){const rows=[];for(let line of String(txt).split(/\r?\n/)){line=line.trim();if(!line)continue;
+    let cells=/[\t;]/.test(line)?line.split(/\s*[\t;]\s*/).filter(c=>c!==""):null,eq,n;
+    if(cells){if(/^\d+$/.test(cells[0])&&cells.length>1&&!/^\d+$/.test(cells[1]))cells.shift();const i=cells.findIndex(c=>!/^-?\d+$/.test(c));if(i<0)continue;eq=cells[i];n=cells.slice(i+1).filter(c=>/^-?\d+$/.test(c)).map(Number)}
+    else{const w=line.split(/\s+/);if(/^\d+$/.test(w[0]))w.shift();const nums=[];while(w.length&&/^-?\d+$/.test(w[w.length-1])&&nums.length<3)nums.unshift(+w.pop());eq=w.join(" ");n=nums}
+    if(!eq||n.length<3)continue;const [pts,v,d]=n.length>=4?[n[0],n[2],n[3]]:n;rows.push({eq,pts,v,d})}return rows}
+$("clForm").onsubmit=async e=>{e.preventDefault();const t=curTeam();if(t==="all")return;const rows=parseTable($("cl_rows").value);
+  if(!rows.length){toast("Je n'ai reconnu aucune ligne : une équipe par ligne, avec points, victoires et défaites");return}
+  if(await safe(setDoc(doc(db,"meta","cl_"+t),{team:t,title:$("cl_title").value.trim()||t,rows,note:$("cl_note").value.trim(),updated:today}))!==false){toast(`Classement ${t} enregistré (${rows.length} équipes)`);$("clEdit").open=false;S.clFor=null}};
 $("matchList").onchange=async e=>{const el=e.target;const box=el.closest("[data-m]");if(!box)return;
   const id=box.dataset.m;const m=S.matches.find(x=>x.id===id);if(!m||m.status==="fin"){renderMatches();return}
   const f=el.dataset.f;let v=el.value;
