@@ -39,11 +39,13 @@ onAuthStateChanged(auth,async u=>{
   const ref=doc(db,"members",u.uid);
   let snap=await getDoc(ref).catch(()=>null);
   const sup=u.email===SUPER_ADMIN;
-  if(!snap||!snap.exists()){await safe(setDoc(ref,{email:u.email,name:u.displayName||"",role:sup?"admin":"pending",at:Date.now()}));snap=await getDoc(ref).catch(()=>null)}
-  else if(sup&&snap.data().role!=="admin"){await safe(updateDoc(ref,{role:"admin"}));snap=await getDoc(ref)}
-  S.role=snap&&snap.exists()?snap.data().role:"pending";
-  if(S.role!=="admin"&&S.role!=="staff"){show("gWait",true);setStatus("accès en attente de validation");return}
-  show("app",true);show("navMembres",isAdmin());route();start();
+  if(!snap||!snap.exists())await safe(setDoc(ref,{email:u.email,name:u.displayName||"",role:sup?"admin":"pending",at:Date.now()}));
+  else if(sup&&snap.data().role!=="admin")await safe(updateDoc(ref,{role:"admin"}));
+  let started=false;
+  unsubs.push(onSnapshot(ref,d=>{S.role=d.exists()?d.data().role:"pending";const ok=S.role==="admin"||S.role==="staff";
+    show("gWait",!ok);show("app",ok);
+    if(!ok){setStatus("accès en attente de validation");return}
+    show("navMembres",isAdmin());route();if(!started){started=true;start()}},()=>{show("gWait",true)}));
 });
 
 /* ---------- Données en direct ---------- */
