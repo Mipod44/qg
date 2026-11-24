@@ -95,6 +95,16 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
 .ev{display:grid;grid-template-columns:4.5em minmax(0,1fr) auto;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);align-items:start}
 .ev .d{font:700 34px/0.95 Oswald,sans-serif;text-align:center;color:var(--redInk)}.ev .d span{display:block;font-size:15px;color:var(--ink);text-transform:uppercase}
 .ev h3{font-size:21px}
+.wk{position:relative;overflow:hidden;background:#111;color:#fff;padding:18px 18px 16px;margin:0 0 14px;border-left:8px solid var(--red)}
+.wk::after{content:"";position:absolute;right:-40px;top:-30px;width:180px;height:180px;border:18px solid var(--red);border-radius:50%;opacity:.35}
+.wk .k{font:600 13px Oswald,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#ff6b6b}
+.wk h3{font-size:clamp(24px,5vw,34px);color:#fff;margin:2px 0 10px;position:relative;z-index:1}
+.wk .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;position:relative;z-index:1}
+.wk h4{margin:0 0 4px;font:600 15px Oswald,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:#ff6b6b}
+.wk ul{margin:0;padding:0;list-style:none}.wk li{padding:3px 0;border-bottom:1px solid #333;font-size:15px}.wk li b{font-family:Oswald,sans-serif;font-weight:600;margin-right:6px}
+.wk .cta{margin:12px 0 0;font:700 19px Oswald,sans-serif;text-transform:uppercase;position:relative;z-index:1}
+.wk button{position:relative;z-index:1;margin-top:10px;background:#fff;color:#111;border-color:#fff}
+.news{padding:14px 0;border-bottom:1px solid var(--line)}.news h3{font-size:21px}.news p{margin:6px 0 0;white-space:pre-line}
 .task{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .task input{width:26px;height:26px;min-height:0;accent-color:var(--red);justify-self:center}
 .task.done .tt{text-decoration:line-through;color:var(--mut)}
@@ -203,10 +213,10 @@ h3.sub{margin:20px 0 0;font:600 15px Oswald,sans-serif;text-transform:uppercase;
 <div id="app" class="hide">
 <div class="stats" id="tally"></div>
 <nav id="nav">
+  <a href="#evenements" data-v="evenements">Actus et événements</a>
   <a href="#convocations" data-v="convocations">Convocations</a>
   <a href="#matchs" data-v="matchs">Matchs et scores</a>
   <a href="#echanges" data-v="echanges">Échanges coachs</a>
-  <a href="#evenements" data-v="evenements">Événements</a>
   <a href="#taches" data-v="taches">Tâches et agenda</a>
   <a href="#salle" data-v="salle">Tours de salle</a>
   <a href="#membres" data-v="membres" id="navMembres" class="hide">Membres</a>
@@ -256,10 +266,15 @@ h3.sub{margin:20px 0 0;font:600 15px Oswald,sans-serif;text-transform:uppercase;
 </section>
 
 <section id="v-evenements" class="hide">
-  <div class="bar"><div><h2>Événements du club</h2><p class="note">Tournois, plateaux, manifestations, réunions où le club participe.</p></div></div>
+  <div class="bar"><div><h2>Actus et événements</h2><p class="note">Les matchs du week-end, les rendez-vous du club et les dernières nouvelles.</p></div></div>
+  <div id="wkPosts"></div>
+  <h3 class="sub">Prochains événements</h3>
   <div id="evList"></div>
-  <details class="w"><summary>Ajouter un événement</summary>
+  <h3 class="sub">Actus du club</h3>
+  <div id="newsList"></div>
+  <details class="w"><summary>Publier une actu ou ajouter un événement</summary>
   <form class="form" id="evForm">
+    <label>Type<select id="e_kind"><option value="event">Événement</option><option value="actu">Actu du club</option></select></label>
     <label>Date<input type="date" id="e_date" required></label>
     <label>Intitulé<input id="e_title" required></label>
     <label>Lieu<input id="e_place"></label>
