@@ -106,6 +106,15 @@ $("profSwitch").onclick=e=>{const b=e.target.closest("[data-act]");if(b)setActiv
 $("profClose").onclick=()=>show("prof",false);
 $("prof").onclick=e=>{if(e.target.id==="prof")show("prof",false)};
 addEventListener("keydown",e=>{if(e.key==="Escape")show("prof",false)});
+/* ---------- Appli installable ---------- */
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+let installEvt=null;const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;if(!standalone)show("installBtn",true)});
+if(isIOS&&!standalone)show("installBtn",true);
+$("installBtn").onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice.catch(()=>{});installEvt=null;show("installBtn",false)}
+  else{const el=$("toast");el.textContent="Sur iPhone : ouvrez ce site dans Safari, touchez Partager puis « Sur l'écran d'accueil ».";el.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>el.style.display="none",8000)}};
+addEventListener("appinstalled",()=>show("installBtn",false));
 window.asmImportPeople=async list=>{if(!isAdmin())return"admin requis";for(let i=0;i<list.length;i+=400){const b=writeBatch(db);list.slice(i,i+400).forEach(p=>{const{licence,...rest}=p;b.set(doc(db,"people",licence),{licence,...rest})});await b.commit()}return list.length+" licenciés importés"};
 async function importSeed(){const b=writeBatch(db);for(const [col,docs] of Object.entries(SEED))for(const [id,data] of Object.entries(docs))b.set(doc(db,col,id),data);
   if(await safe(b.commit())!==false)toast("Données de départ importées")}
