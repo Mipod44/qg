@@ -14,7 +14,7 @@ const setStatus=t=>$("status").textContent=t;
 if(firebaseConfig.apiKey==="A_REMPLIR"){setStatus("configuration Firebase manquante (config.js)");throw new Error("config.js à remplir")}
 const fb=initializeApp(firebaseConfig);const auth=getAuth(fb);const db=getFirestore(fb);
 
-const S={conv:[],matches:[],msgs:[],events:[],tasks:[],members:[],table:null,cat:"Seniors M",user:null,role:null};
+const S={conv:[],matches:[],msgs:[],events:[],tasks:[],meetings:[],duties:[],members:[],table:null,cat:"Seniors M",user:null,role:null};
 const unsubs=[];
 const JOURS=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"],MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const dayLabel=d=>{const x=new Date(d+"T12:00");return isNaN(x)?d:JOURS[x.getDay()]+" "+x.getDate()+" "+MOIS[x.getMonth()]};
@@ -53,10 +53,12 @@ function start(){
   setStatus("chargement…");
   const live=(name,key,after)=>unsubs.push(onSnapshot(collection(db,name),s=>{S[key]=s.docs.map(d=>({id:d.id,...d.data()}));setStatus("à jour, en direct");after()},e=>{console.error(e);setStatus("connexion perdue, rechargez la page")}));
   live("conv","conv",()=>{renderConv();renderTally()});
-  live("matches","matches",()=>{renderMatches();renderTally()});
+  live("matches","matches",()=>{renderMatches();renderTally();renderWeek()});
   live("msgs","msgs",()=>{renderCats();renderMsgs()});
-  live("events","events",renderEvents);
-  live("tasks","tasks",renderTasks);
+  live("events","events",()=>{renderEvents();renderWeek()});
+  live("tasks","tasks",()=>{renderTasks();renderWeek()});
+  live("meetings","meetings",()=>{renderMeetings();renderWeek()});
+  live("duties","duties",()=>{renderDuties();renderWeek()});
   unsubs.push(onSnapshot(doc(db,"meta","classement"),d=>{S.table=d.exists()?d.data():null;renderMatches()},()=>{}));
   if(isAdmin())live("members","members",renderMembers);
 }
@@ -64,7 +66,7 @@ async function importSeed(){const b=writeBatch(db);for(const [col,docs] of Objec
   if(await safe(b.commit())!==false)toast("Données de départ importées")}
 
 /* ---------- Navigation ---------- */
-const VIEWS=["convocations","matchs","echanges","evenements","taches","membres"];
+const VIEWS=["convocations","matchs","echanges","evenements","taches","salle","membres"];
 function route(){let v=location.hash.slice(1);if(!VIEWS.includes(v)||(v==="membres"&&!isAdmin()))v="convocations";
   VIEWS.forEach(x=>show("v-"+x,x===v));document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===v))}
 addEventListener("hashchange",route);
@@ -148,8 +150,73 @@ function renderTasks(){
 $("taskList").onchange=async e=>{const c=e.target.closest("[data-t]");if(c)await safe(updateDoc(doc(db,"tasks",c.dataset.t),{done:c.checked}))};
 $("taskList").onclick=async e=>{const b=e.target.closest("[data-delt]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"tasks",b.dataset.delt)))}};
 $("taskForm").onsubmit=async e=>{e.preventDefault();
-  if(await safe(addDoc(collection(db,"tasks"),{title:$("t_title").value.trim(),freq:$("t_freq").value,when:$("t_when").value.trim(),owner:$("t_owner").value.trim(),done:false,order:99}))!==false)e.target.reset()};
+  if(await safe(addDoc(collection(db,"tasks"),{title:$("t_title").value.trim(),freq:$("t_freq").value,when:[$("t_day").value,$("t_when").value.trim()].filter(Boolean).join(" "),owner:$("t_owner").value.trim(),done:false,order:99}))!==false)e.target.reset()};
 $("resetWeek").onclick=async()=>{for(const t of S.tasks.filter(t=>t.freq==="Chaque semaine"&&t.done))await safe(updateDoc(doc(db,"tasks",t.id),{done:false}))};
+
+/* ---------- Dictée ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
+if(!SR)$("micNote").textContent="Dictée indisponible sur ce navigateur : utilisez le micro du clavier du téléphone.";
+$("micBtn").onclick=()=>{
+  if(!SR){toast("Utilisez le micro du clavier de votre téléphone pour dicter");$("m_text").focus();return}
+  if(rec){rec.stop();return}
+  rec=new SR();rec.lang="fr-FR";rec.continuous=true;rec.interimResults=true;
+  const base=$("m_text").value.trim();let fin="";
+  rec.onresult=e=>{let tmp="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+" ";else tmp+=r[0].transcript}
+    $("m_text").value=((base?base+" ":"")+fin+tmp).replace(/\s+/g," ")};
+  rec.onerror=e=>toast(e.error==="not-allowed"?"Autorisez le micro pour dicter":"Dictée interrompue");
+  rec.onend=()=>{rec=null;$("micBtn").classList.remove("rec");$("micBtn").textContent="Dicter";$("micNote").textContent=""};
+  try{rec.start();$("micBtn").classList.add("rec");$("micBtn").textContent="Arrêter";$("micNote").textContent="Parlez, le texte s'écrit tout seul."}catch{rec=null;toast("Micro indisponible")}
+};
+
+/* ---------- Agenda de la semaine ---------- */
+const DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+function renderWeek(){
+  const now=new Date();const mon=new Date(now);mon.setHours(12,0,0,0);mon.setDate(now.getDate()-((now.getDay()+6)%7));const td=iso(now);
+  $("week").innerHTML=DAYS.map((name,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);const ds=iso(d);const items=[];
+    S.meetings.filter(m=>m.date===ds).sort((a,b)=>tmin(a.time)-tmin(b.time)).forEach(m=>items.push(`<li class="k-meet">${esc([m.time,m.body].filter(Boolean).join(" · "))}</li>`));
+    S.events.filter(v=>v.date===ds).forEach(v=>items.push(`<li class="k-ev">${esc(v.title)}</li>`));
+    S.tasks.filter(t=>t.freq==="Chaque semaine"&&norm(t.when).includes(norm(name))).forEach(t=>items.push(`<li class="k-task ${t.done?"done":""}">${esc(t.title)}</li>`));
+    const ms=S.matches.filter(m=>m.date===ds);if(ms.length){const h=ms.filter(m=>m.home).length;items.push(`<li class="k-info">${ms.length} match${ms.length>1?"s":""}${h?`, ${h} à domicile`:""}</li>`)}
+    const du=S.duties.filter(x=>x.date===ds).length;if(du)items.push(`<li class="k-info">${du} créneau${du>1?"x":""} de tour de salle</li>`);
+    return`<div class="wd ${ds===td?"today":""}"><h4>${name} <span>${d.getDate()} ${MOIS[d.getMonth()]}</span></h4><ul>${items.join("")||'<li class="k-info">Rien de prévu</li>'}</ul></div>`}).join("");
+}
+
+/* ---------- Réunions ---------- */
+function renderMeetings(){
+  const list=S.meetings.filter(m=>m.date>=today).sort((a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time));
+  if(!list.length){$("meetList").innerHTML='<div class="empty">Aucune réunion prévue. Ajoutez la prochaine réunion du bureau ou d\'une commission.</div>';return}
+  $("meetList").innerHTML=list.map(m=>{const x=new Date(m.date+"T12:00");return`<div class="meet"><div class="d">${x.getDate()}<span>${MOIS[x.getMonth()]}</span></div><div><h3>${esc(m.body)}</h3><div class="note">${[JOURS[x.getDay()]+(m.time?" à "+m.time:""),m.place].filter(Boolean).map(esc).join(" · ")}</div>${m.agenda?`<p style="margin:6px 0 0;white-space:pre-wrap">${esc(m.agenda)}</p>`:""}</div><button class="sm x" data-delr="${esc(m.id)}">Suppr.</button></div>`}).join("");
+}
+$("meetList").onclick=async e=>{const b=e.target.closest("[data-delr]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"meetings",b.dataset.delr)))}};
+$("meetForm").onsubmit=async e=>{e.preventDefault();
+  if(await safe(addDoc(collection(db,"meetings"),{date:$("r_date").value,time:$("r_time").value.trim(),body:$("r_body").value,place:$("r_place").value.trim(),agenda:$("r_agenda").value.trim()}))!==false)e.target.reset()};
+
+/* ---------- Tours de salle ---------- */
+function hl(s,q){const t=esc(s);if(!q)return t;const i=norm(s).indexOf(q);if(i<0)return t;return esc(s.slice(0,i))+"<mark>"+esc(s.slice(i,i+q.length))+"</mark>"+esc(s.slice(i+q.length))}
+function renderDuties(){
+  const q=norm($("dSearch").value.trim());
+  let list=S.duties.filter(x=>x.date>=today).sort((a,b)=>a.date.localeCompare(b.date)||tmin(a.time)-tmin(b.time));
+  if(q)list=list.filter(x=>norm([x.match,x.arb,x.table,x.resp].join(" ")).includes(q));
+  if(!list.length){$("dutyList").innerHTML=`<div class="empty">${q?"Aucun créneau pour ce nom.":"Aucun tour de salle à venir. Importez le planning ou ajoutez un créneau."}</div>`;return}
+  let out="",d="";
+  for(const x of list){if(x.date!==d){if(d)out+="</tbody></table></div>";d=x.date;out+=`<div class="day">${esc(dayLabel(d))}</div><div class="scroll"><table class="duty"><thead><tr><th>Heure</th><th>Match</th><th>Arbitres</th><th>Table de marque</th><th>Resp. salle</th><th></th></tr></thead><tbody>`}
+    out+=`<tr class="${q?"mine":""}"><td class="t" data-l="Heure">${esc(x.time)}</td><td data-l="Match">${hl(x.match||"",q)}</td><td data-l="Arbitres">${hl(x.arb||"",q)}</td><td data-l="Table de marque">${hl(x.table||"",q)}</td><td data-l="Resp. salle">${hl(x.resp||"",q)}</td><td data-l=""><button class="sm x" data-deld="${esc(x.id)}">Suppr.</button></td></tr>`}
+  $("dutyList").innerHTML=out+"</tbody></table></div>";
+}
+$("dSearch").oninput=()=>renderDuties();
+$("dutyList").onclick=async e=>{const b=e.target.closest("[data-deld]");if(b){b.disabled=true;await safe(deleteDoc(doc(db,"duties",b.dataset.deld)))}};
+$("dutyForm").onsubmit=async e=>{e.preventDefault();
+  if(await safe(addDoc(collection(db,"duties"),{date:$("d_date").value,time:$("d_time").value.trim(),match:$("d_match").value.trim(),arb:$("d_arb").value.trim(),table:$("d_table").value.trim(),resp:$("d_resp").value.trim()}))!==false)e.target.reset()};
+const pDate=s=>{s=String(s||"").trim();let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);if(!m)return null;const y=m[3].length===2?"20"+m[3]:m[3];return`${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`};
+$("dImport").onclick=async()=>{
+  const rows=$("dPaste").value.split(/\r?\n/).map(l=>l.split(l.includes("\t")?"\t":";").map(c=>c.trim())).filter(r=>r.some(Boolean));
+  const ok=[],bad=[];rows.forEach((r,i)=>{const d=pDate(r[0]);if(d)ok.push({date:d,time:r[1]||"",match:r[2]||"",arb:r[3]||"",table:r[4]||"",resp:r[5]||""});else if(i>0||!/date/i.test(r[0]))bad.push(i+1)});
+  if(!ok.length){$("dImportNote").textContent="Aucune ligne reconnue : la première colonne doit être une date (jj/mm/aaaa).";return}
+  for(let i=0;i<ok.length;i+=400){const b=writeBatch(db);ok.slice(i,i+400).forEach(x=>b.set(doc(collection(db,"duties")),x));if(await safe(b.commit())===false)return}
+  $("dPaste").value="";$("dImportNote").textContent=`${ok.length} créneau${ok.length>1?"x":""} importé${ok.length>1?"s":""}`+(bad.length?`, lignes ignorées : ${bad.join(", ")}`:"")+".";
+};
 
 /* ---------- Membres (admin) ---------- */
 function renderMembers(){
