@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QG AS La Madeleine</title>
 <link rel="icon" href="logo.webp">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#d71920">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ASM Basket">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -187,6 +193,7 @@ body.player .w,body.player button.x,body.player #seedBtn{display:none!important}
   <svg class="sw" viewBox="0 0 560 160" preserveAspectRatio="xMaxYMid slice" aria-hidden="true"><path d="M120 170 C260 120 400 40 600 -10" fill="none" stroke="#d71920" stroke-width="14"/><path d="M180 175 C300 125 430 55 610 10" fill="none" stroke="var(--ink)" stroke-width="7"/><path d="M60 170 C220 130 380 60 580 -20" fill="none" stroke="#d71920" stroke-width="3"/><path d="M250 180 C350 140 470 80 620 40" fill="none" stroke="#d71920" stroke-width="5" opacity=".55"/></svg>
   <img src="logo.webp" alt="Logo ASM Basket La Madeleine" width="104" height="104">
   <div class="nm"><h1>ASM Basket<em>La Madeleine · QG du club</em></h1><p>Bureau, entraîneurs, commission technique · <span id="status">Connexion…</span></p></div>
+  <button type="button" class="sm pri hide" id="installBtn" style="position:relative;z-index:1;margin-left:auto">Installer l'appli</button>
   <div class="who hide" id="who"><button type="button" class="chip" id="meBtn" aria-label="Ouvrir mon profil"><span class="av" id="meAv"></span><span class="mt"><b id="whoName"></b><small id="meLic"></small></span></button><button class="sm" id="logout">Se déconnecter</button></div>
 </header>
 <div id="app" class="hide">
