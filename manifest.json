@@ -1,0 +1,16 @@
+{
+  "name": "QG ASM Basket La Madeleine",
+  "short_name": "ASM Basket",
+  "description": "Convocations, scores en direct, échanges coachs et tours de salle de l'AS La Madeleine.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#d71920",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
