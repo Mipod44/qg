@@ -14,7 +14,7 @@ const setStatus=t=>$("status").textContent=t;
 if(firebaseConfig.apiKey==="A_REMPLIR"){setStatus("configuration Firebase manquante (config.js)");throw new Error("config.js à remplir")}
 const fb=initializeApp(firebaseConfig);const auth=getAuth(fb);const db=getFirestore(fb);
 
-const S={conv:[],matches:[],msgs:[],events:[],tasks:[],meetings:[],duties:[],members:[],people:[],pmap:{},me:null,table:null,cat:"Seniors M",user:null,role:null};
+const S={conv:[],matches:[],msgs:[],events:[],tasks:[],meetings:[],duties:[],members:[],people:[],pmap:{},me:null,table:null,cat:"general",user:null,role:null};
 const unsubs=[];
 const JOURS=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"],MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const dayLabel=d=>{const x=new Date(d+"T12:00");return isNaN(x)?d:JOURS[x.getDay()]+" "+x.getDate()+" "+MOIS[x.getMonth()]};
@@ -180,11 +180,12 @@ $("matchList").addEventListener("click",async e=>{const ok=e.target.closest("[da
 
 /* ---------- Échanges ---------- */
 function renderCats(){const n={};S.msgs.forEach(m=>n[m.cat]=(n[m.cat]||0)+1);
-  $("cats").innerHTML=CATS.map(c=>`<button type="button" class="${c===S.cat?"on":""}" data-cat="${c}">${c}${n[c]?`<i>${n[c]}</i>`:""}</button>`).join("");$("msgCat").textContent=S.cat}
+  $("cats").innerHTML=`<button type="button" class="gen ${S.cat==="general"?"on":""}" data-cat="general">Tous les coachs${n.general?`<i>${n.general}</i>`:""}</button><span class="sep"></span>`+CATS.map(c=>`<button type="button" class="${c===S.cat?"on":""}" data-cat="${c}">${c}${n[c]?`<i>${n[c]}</i>`:""}</button>`).join("");$("msgCat").textContent=catLabel(S.cat)}
+const catLabel=c=>c==="general"?"tous les coachs":c;
 $("cats").onclick=e=>{const b=e.target.closest("[data-cat]");if(!b)return;S.cat=b.dataset.cat;renderCats();renderMsgs()};
 function renderMsgs(){
   const list=S.msgs.filter(m=>m.cat===S.cat).sort((a,b)=>a.ts-b.ts);
-  if(!list.length){$("msgList").innerHTML=`<div class="empty">Pas encore d'échange pour ${esc(S.cat)}.</div>`;return}
+  if(!list.length){$("msgList").innerHTML=`<div class="empty">${S.cat==="general"?"Pas encore de message pour tous les coachs. Utilisez ce fil pour les consignes générales du club.":"Pas encore d'échange pour "+esc(S.cat)+"."}</div>`;return}
   $("msgList").innerHTML=list.map(m=>{const dt=new Date(m.ts);return`<div class="msg ${S.user&&m.author===S.user.uid?"me":""}"><small>${esc(m.who||"Membre du club")} · ${dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</small><p>${esc(m.text)}</p></div>`}).join("");
 }
 $("msgForm").onsubmit=async e=>{e.preventDefault();const t=$("m_text").value.trim();if(!t)return;
