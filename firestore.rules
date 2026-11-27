@@ -1,8 +1,11 @@
 rules_version = '2';
 // Règles de sécurité du QG ASM Basket.
 // - Toute personne connectée peut demander l'accès (fiche "members" en attente).
-// - Seuls les membres validés (staff ou admin) lisent et modifient les données du club.
-// - Seuls les admins valident ou retirent des membres.
+// - Coachs, staff et admins lisent et modifient les données du club.
+// - Commission technique (ctmsgs) : staff (bureau, CT) et admins uniquement, ni coachs ni joueurs.
+// - Joueurs : lecture des convocations, matchs, événements, tours de salle et classement,
+//   saisie du score des matchs, lecture de leur seule fiche licencié.
+// - Seuls les admins valident les membres et gèrent les licenciés.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
@@ -11,9 +14,12 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
     function memberDoc() { return /databases/$(database)/documents/members/$(request.auth.uid); }
-    function role() { return get(memberDoc()).data.role; }
-    function isStaff() { return superAdmin() || (signedIn() && exists(memberDoc()) && role() in ['staff', 'admin']); }
-    function isAdmin() { return superAdmin() || (signedIn() && exists(memberDoc()) && role() == 'admin'); }
+    function member() { return get(memberDoc()).data; }
+    function hasRole(rs) { return signedIn() && exists(memberDoc()) && member().role in rs; }
+    function isStaff() { return superAdmin() || hasRole(['staff', 'admin']); }
+    function isTeam() { return superAdmin() || hasRole(['coach', 'staff', 'admin']); }
+    function isAdmin() { return superAdmin() || hasRole(['admin']); }
+    function isPlayer() { return hasRole(['player']); }
 
     match /members/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
@@ -22,8 +28,35 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /people/{pid} {
+      allow read: if isTeam() || (isPlayer() && (pid in member().get('persons', []) || member().get('person', '') == pid));
+      allow write: if isAdmin();
+    }
+
+    // Un match "Terminé" est figé : plus personne ne peut le modifier ni le supprimer depuis l'appli.
+    // Une correction se fait uniquement par un admin, depuis la console Firebase.
+    match /matches/{id} {
+      allow create: if isTeam();
+      allow update: if resource.data.get('status', '') != 'fin'
+        && (isTeam() || (isPlayer() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['us', 'them', 'status'])));
+      allow delete: if isTeam() && resource.data.get('status', '') != 'fin';
+    }
+
+    // Images de la boutique et du club : lues par tous les membres, écrites par les admins.
+    match /assets/{id} {
+      allow read: if isTeam() || isPlayer();
+      allow write: if isAdmin();
+    }
+
+    // Fil privé de la commission technique.
+    match /ctmsgs/{id} {
+      allow read, write: if isStaff();
+    }
+
     match /{coll}/{id} {
-      allow read, write: if isStaff() && coll in ['conv', 'matches', 'msgs', 'events', 'tasks', 'meta'];
+      allow read: if (isTeam() && coll in ['conv', 'matches', 'msgs', 'events', 'tasks', 'meetings', 'duties', 'meta'])
+        || (isPlayer() && coll in ['conv', 'matches', 'events', 'duties', 'meta']);
+      allow write: if isTeam() && coll in ['conv', 'msgs', 'events', 'tasks', 'meetings', 'duties', 'meta'];
     }
   }
 }
