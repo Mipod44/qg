@@ -14,7 +14,7 @@ const setStatus=t=>$("status").textContent=t;
 if(firebaseConfig.apiKey==="A_REMPLIR"){setStatus("configuration Firebase manquante (config.js)");throw new Error("config.js à remplir")}
 const fb=initializeApp(firebaseConfig);const auth=getAuth(fb);const db=getFirestore(fb);
 
-const S={conv:[],matches:[],msgs:[],events:[],tasks:[],meetings:[],duties:[],members:[],people:[],pmap:{},me:null,table:null,cat:"general",user:null,role:null};
+const S={conv:[],matches:[],msgs:[],ctmsgs:[],events:[],tasks:[],meetings:[],duties:[],members:[],people:[],pmap:{},me:null,table:null,cat:"general",user:null,role:null};
 const unsubs=[];
 const JOURS=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"],MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const dayLabel=d=>{const x=new Date(d+"T12:00");return isNaN(x)?d:JOURS[x.getDay()]+" "+x.getDate()+" "+MOIS[x.getMonth()]};
@@ -22,6 +22,7 @@ const today=new Date().toISOString().slice(0,10);
 const tmin=t=>{const m=String(t||"").match(/(\d+)h(\d*)/);return m?(+m[1])*60+(+m[2]||0):9999};
 const isAdmin=()=>S.role==="admin";
 const isPlayer=()=>S.role==="player";
+const isCT=()=>["admin","staff"].includes(S.role);
 async function safe(p){try{return await p}catch(e){console.error(e);toast(e.code==="permission-denied"?"Action non autorisée":"Échec de l'enregistrement, réessayez");return false}}
 
 /* ---------- Connexion ---------- */
@@ -43,7 +44,7 @@ onAuthStateChanged(auth,async u=>{
   if(!snap||!snap.exists())await safe(setDoc(ref,{email:u.email,name:u.displayName||"",role:sup?"admin":"pending",at:Date.now()}));
   else if(sup&&snap.data().role!=="admin")await safe(updateDoc(ref,{role:"admin"}));
   let started=false;
-  unsubs.push(onSnapshot(ref,d=>{const prev=S.role;S.me=d.exists()?d.data():null;S.role=S.me?S.me.role:"pending";const ok=["admin","staff","player"].includes(S.role);
+  unsubs.push(onSnapshot(ref,d=>{const prev=S.role;S.me=d.exists()?d.data():null;S.role=S.me?S.me.role:"pending";const ok=["admin","staff","coach","player"].includes(S.role);
     show("gWait",!ok);show("app",ok);document.body.classList.toggle("player",isPlayer());
     if(!ok){setStatus("accès en attente de validation");return}
     if(started&&prev!==S.role){location.reload();return}
@@ -62,6 +63,7 @@ function start(){
   live("duties","duties",()=>{renderDuties();renderWeek();renderProfile()});
   if(!isPlayer()){
     live("msgs","msgs",()=>{renderCats();renderMsgs()});
+    if(isCT())live("ctmsgs","ctmsgs",()=>{renderCats();renderMsgs()});
     live("tasks","tasks",()=>{renderTasks();renderWeek()});
     live("meetings","meetings",()=>{renderMeetings();renderWeek();renderProfile()});
     live("people","people",()=>{renderClub();S.pmap=Object.fromEntries(S.people.map(p=>[p.id,p]));$("peopleList").innerHTML=S.people.map(p=>`<option value="${esc(p.prenom+" "+p.nom+" · "+p.id)}">`).join("");loadMe();if(isAdmin())renderMembers()});
@@ -273,17 +275,18 @@ $("matchList").addEventListener("click",async e=>{const ok=e.target.closest("[da
   if(await safe(updateDoc(doc(db,"matches",id),{us:Math.max(0,us),them:Math.max(0,th),status:"fin"}))!==false)toast("Match terminé : score validé")});
 
 /* ---------- Échanges ---------- */
-function renderCats(){const n={};S.msgs.forEach(m=>n[m.cat]=(n[m.cat]||0)+1);
-  $("cats").innerHTML=`<button type="button" class="gen ${S.cat==="general"?"on":""}" data-cat="general">Tous les coachs${n.general?`<i>${n.general}</i>`:""}</button><span class="sep"></span>`+CATS.map(c=>`<button type="button" class="${c===S.cat?"on":""}" data-cat="${c}">${c}${n[c]?`<i>${n[c]}</i>`:""}</button>`).join("");$("msgCat").textContent=catLabel(S.cat)}
-const catLabel=c=>c==="general"?"tous les coachs":c;
+function renderCats(){const n={};S.msgs.forEach(m=>n[m.cat]=(n[m.cat]||0)+1);if(S.cat==="ct"&&!isCT())S.cat="general";
+  $("cats").innerHTML=(isCT()?`<button type="button" class="ct ${S.cat==="ct"?"on":""}" data-cat="ct">Commission technique${S.ctmsgs.length?`<i>${S.ctmsgs.length}</i>`:""}</button>`:"")+`<button type="button" class="gen ${S.cat==="general"?"on":""}" data-cat="general">Tous les coachs${n.general?`<i>${n.general}</i>`:""}</button><span class="sep"></span>`+CATS.map(c=>`<button type="button" class="${c===S.cat?"on":""}" data-cat="${c}">${c}${n[c]?`<i>${n[c]}</i>`:""}</button>`).join("");$("msgCat").textContent=catLabel(S.cat)}
+const catLabel=c=>c==="general"?"tous les coachs":c==="ct"?"la commission technique (staff, bureau, admins)":c;
 $("cats").onclick=e=>{const b=e.target.closest("[data-cat]");if(!b)return;S.cat=b.dataset.cat;renderCats();renderMsgs()};
 function renderMsgs(){
-  const list=S.msgs.filter(m=>m.cat===S.cat).sort((a,b)=>a.ts-b.ts);
-  if(!list.length){$("msgList").innerHTML=`<div class="empty">${S.cat==="general"?"Pas encore de message pour tous les coachs. Utilisez ce fil pour les consignes générales du club.":"Pas encore d'échange pour "+esc(S.cat)+"."}</div>`;return}
+  const ct=S.cat==="ct";$("ctNote").classList.toggle("hide",!ct);
+  const list=(ct?S.ctmsgs:S.msgs.filter(m=>m.cat===S.cat)).sort((a,b)=>a.ts-b.ts);
+  if(!list.length){$("msgList").innerHTML=`<div class="empty">${ct?"Pas encore de message dans la commission technique.":S.cat==="general"?"Pas encore de message pour tous les coachs. Utilisez ce fil pour les consignes générales du club.":"Pas encore d'échange pour "+esc(S.cat)+"."}</div>`;return}
   $("msgList").innerHTML=list.map(m=>{const dt=new Date(m.ts);return`<div class="msg ${S.user&&m.author===S.user.uid?"me":""}"><small>${esc(m.who||"Membre du club")} · ${dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</small><p>${esc(m.text)}</p></div>`}).join("");
 }
 $("msgForm").onsubmit=async e=>{e.preventDefault();const t=$("m_text").value.trim();if(!t)return;
-  if(await safe(addDoc(collection(db,"msgs"),{cat:S.cat,text:t,author:S.user.uid,who:S.user.displayName||S.user.email,ts:Date.now()}))!==false)$("m_text").value=""};
+  if(await safe(addDoc(collection(db,S.cat==="ct"?"ctmsgs":"msgs"),{cat:S.cat,text:t,author:S.user.uid,who:S.user.displayName||S.user.email,ts:Date.now()}))!==false)$("m_text").value=""};
 
 /* ---------- Événements ---------- */
 function weekPosts(){
@@ -384,11 +387,11 @@ $("dImport").onclick=async()=>{
 
 /* ---------- Membres (admin) ---------- */
 function renderMembers(){
-  const order={pending:0,staff:1,admin:2};
+  const order={pending:0,player:1,coach:2,staff:3,admin:4};
   const list=[...S.members].sort((a,b)=>(order[a.role]??0)-(order[b.role]??0)||(a.at||0)-(b.at||0));
   if(!list.length){$("memList").innerHTML='<div class="empty">Personne pour l\'instant.</div>';return}
   $("memList").innerHTML=list.map(m=>{const ps=linked(m).map(id=>S.pmap[id]||{id,prenom:"",nom:id,licence:id});return`<div class="mem"><div><b>${esc(m.name||m.email)}</b>${m.role==="pending"?' <span class="tag dom">À valider</span>':""}<small>${esc(m.email)}</small><div>${ps.map(p=>`<span class="lk">${esc((p.prenom+" "+p.nom).trim()+" · "+p.licence)}<button type="button" data-unlink="${esc(m.id)}" data-pid="${esc(p.id)}" aria-label="Retirer ce licencié">×</button></span>`).join("")}</div></div>
-    <div class="acts"><input list="peopleList" data-link="${esc(m.id)}" placeholder="${ps.length?"Ajouter un autre licencié":"Relier à un licencié"}" aria-label="Ajouter un licencié" value="">${m.email===SUPER_ADMIN?'<span class="tag">Admin principal</span>':`<select data-mem="${esc(m.id)}" aria-label="Rôle"><option value="pending"${m.role==="pending"?" selected":""}>En attente</option><option value="player"${m.role==="player"?" selected":""}>Joueur</option><option value="staff"${m.role==="staff"?" selected":""}>Staff</option><option value="admin"${m.role==="admin"?" selected":""}>Admin</option></select><button class="sm x" data-delm="${esc(m.id)}">Retirer</button>`}</div></div>`}).join("");
+    <div class="acts"><input list="peopleList" data-link="${esc(m.id)}" placeholder="${ps.length?"Ajouter un autre licencié":"Relier à un licencié"}" aria-label="Ajouter un licencié" value="">${m.email===SUPER_ADMIN?'<span class="tag">Admin principal</span>':`<select data-mem="${esc(m.id)}" aria-label="Rôle"><option value="pending"${m.role==="pending"?" selected":""}>En attente</option><option value="player"${m.role==="player"?" selected":""}>Joueur</option><option value="coach"${m.role==="coach"?" selected":""}>Coach</option><option value="staff"${m.role==="staff"?" selected":""}>Staff</option><option value="admin"${m.role==="admin"?" selected":""}>Admin</option></select><button class="sm x" data-delm="${esc(m.id)}">Retirer</button>`}</div></div>`}).join("");
   const p=list.filter(m=>m.role==="pending").length;$("navMembres").textContent=p?`Membres (${p})`:"Membres";
 }
 $("memList").addEventListener("change",async e=>{const i=e.target.closest("[data-link]");if(!i)return;const lic=(i.value.split("·").pop()||"").trim();
