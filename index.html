@@ -88,6 +88,8 @@ tr.us td{font-weight:700;background:var(--red);color:#fff}
 .chips button.on{background:var(--blk);color:var(--blkInk);border-color:var(--blk)}
 .chips button i{font-style:normal;background:var(--red);color:#fff;border-radius:99px;padding:0 6px;margin-left:4px;font-size:12px}
 .msgs{display:grid;gap:10px;margin-bottom:14px}
+#cats button.ct{background:#111;color:#fff;border-color:#111}#cats button.ct.on{background:var(--red);border-color:var(--red)}#cats button.ct.on i{background:#111}
+.ctnote{border-left:4px solid var(--red);padding:6px 10px;background:var(--panel)}
 .msg{padding:10px 12px;background:var(--panel);border-left:4px solid var(--blk);max-width:46em}
 .msg.me{border-left-color:var(--red);margin-left:auto}
 .msg small{color:var(--mut);display:block;font-size:13px}
@@ -279,6 +281,7 @@ h3.sub{margin:20px 0 0;font:600 15px Oswald,sans-serif;text-transform:uppercase;
 <section id="v-echanges" class="hide">
   <div class="bar"><div><h2>Échanges coachs</h2><p class="note">« Tous les coachs » pour les consignes générales du club, puis un fil par catégorie entre coach, entraîneur et commission technique.</p></div></div>
   <div class="chips" id="cats"></div>
+  <p class="note ctnote hide" id="ctNote">Fil privé de la commission technique : visible uniquement par le staff, le bureau et les admins. Les coachs et les joueurs ne le voient pas.</p>
   <div class="msgs" id="msgList"></div>
   <form class="form w" id="msgForm" style="grid-template-columns:minmax(0,1fr)">
     <label>Message pour <span id="msgCat"></span><textarea id="m_text" required placeholder="Effectif, absences, consignes, horaires d'entraînement… ou appuyez sur Dicter et parlez."></textarea></label>
